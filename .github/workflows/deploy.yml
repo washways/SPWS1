@@ -31,7 +31,7 @@ jobs:
           cache: 'npm' # Caches node modules for faster builds
 
       - name: 3. Install Dependencies
-        run: npm ci # 'ci' is the recommended command for continuous integration
+        run: npm install # 'ci' is the recommended command for continuous integration
 
       - name: 4. Run Build
         # This uses your existing 'npm run build' command to create the 'dist' folder
