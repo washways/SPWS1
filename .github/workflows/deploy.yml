@@ -28,18 +28,19 @@ jobs:
           node-version: 20 
           cache: 'npm'
 
+       # ...
       - name: 3. Install Dependencies
-        run: npm install
+        run: npm install 
 
-      # -------------------------------------------------------------------
-      - name: 4. Run Build
-        # Use 'npm run build 2>&1' to redirect errors (stderr) to standard output (stdout)
-        # and pipe it to 'tee' to ensure it's displayed, and then exit with '|| true'
-        run: npm run build 2>&1 | tee build_log.txt || true
-      # -------------------------------------------------------------------
-      
+      - name: 4. Run Build (FORCED ERROR LOGGING) 
+        # This uses the bash 'set -o pipefail' trick to ensure the exit code of the build 
+        # is correctly passed, but still captures logs.
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee build_output.txt
+          
       - name: 5. Setup GitHub Pages
-        uses: actions/configure-pages@v5
+      # ... rest of the YAML is the same
 
       - name: 6. Upload Artifact
         uses: actions/upload-pages-artifact@v3
