@@ -32,10 +32,10 @@ jobs:
         run: npm install
 
       # -------------------------------------------------------------------
-      - name: 4. Run Build (FORCED ERROR LOGGING) 👈 CRITICAL CHANGE
-        # This command runs your build with increased debugging (-d) and tells the shell
-        # to proceed (|| true) if a non-zero exit code is encountered, forcing logs to display.
-        run: npm run build -- -d || true 
+      - name: 4. Run Build
+        # Use 'npm run build 2>&1' to redirect errors (stderr) to standard output (stdout)
+        # and pipe it to 'tee' to ensure it's displayed, and then exit with '|| true'
+        run: npm run build 2>&1 | tee build_log.txt || true
       # -------------------------------------------------------------------
       
       - name: 5. Setup GitHub Pages
