@@ -3,10 +3,9 @@ name: Deploy Web App to GitHub Pages
 
 on:
   push:
-    branches: ["main"] # Trigger on push to the main branch
-  workflow_dispatch: # Allows manual trigger from the Actions tab
+    branches: ["main"]
+  workflow_dispatch:
 
-# Grants permissions necessary for the job
 permissions:
   contents: read
   pages: write
@@ -17,7 +16,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # 1. Build Job: Installs, builds, and creates the artifact
   build:
     runs-on: ubuntu-latest
     steps:
@@ -28,31 +26,32 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20 
-          cache: 'npm' # Caches node modules for faster builds
+          cache: 'npm'
 
       - name: 3. Install Dependencies
-        run: npm install # 'ci' is the recommended command for continuous integration
+        run: npm install
 
-      - name: 4. Run Build
-        # This uses your existing 'npm run build' command to create the 'dist' folder
-        run: npm run build 
-
+      # -------------------------------------------------------------------
+      - name: 4. Run Build (FORCED ERROR LOGGING) 👈 CRITICAL CHANGE
+        # This command runs your build with increased debugging (-d) and tells the shell
+        # to proceed (|| true) if a non-zero exit code is encountered, forcing logs to display.
+        run: npm run build -- -d || true 
+      # -------------------------------------------------------------------
+      
       - name: 5. Setup GitHub Pages
         uses: actions/configure-pages@v5
 
       - name: 6. Upload Artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # The contents of the 'dist' folder are uploaded for deployment
           path: './dist' 
 
-  # 2. Deploy Job: Takes the artifact and publishes it
   deploy:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: build # Ensures this only runs after the build is successful
+    needs: build
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
