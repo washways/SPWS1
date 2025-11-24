@@ -1,11 +1,12 @@
 # .github/workflows/deploy.yml
-name: Deploy Web App for Debugging
+name: Deploy Web App to GitHub Pages
 
 on:
   push:
-    branches: ["main"]
-  workflow_dispatch:
+    branches: ["main"] # Trigger on push to the main branch
+  workflow_dispatch: # Allows manual trigger from the Actions tab
 
+# Grants permissions necessary for the job
 permissions:
   contents: read
   pages: write
@@ -16,6 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 1. Build Job: Installs, builds, and creates the artifact
   build:
     runs-on: ubuntu-latest
     steps:
@@ -29,27 +31,29 @@ jobs:
           cache: 'npm'
 
       - name: 3. Install Dependencies
-        run: npm install
+        run: npm install 
 
-      # -------------------------------------------------------------------
-      - name: 4. Run Build (FORCED LOGGING) 👈 Check this step output first
-        # This command will run the build, redirect all errors to stdout, and capture the log.
-        run: npm run build 2>&1 | tee build_output.txt
+      - name: 4. Run Build
+        # This uses your existing 'npm run build' command to create the 'dist' folder
+        run: npm run build 
 
-      - name: 5. Display Directory Contents
-        # This is a new step to see what files exist after the build attempt
-        run: ls -alR
-      
-      - name: 6. Output Build Log
-        # This is a new step to explicitly print the log file created in step 4
-        run: cat build_output.txt
+      - name: 5. Setup GitHub Pages
+        uses: actions/configure-pages@v5
 
-      - name: 7. Archive All Files (for inspection)
-        # This uploads ALL files, including the build log, for you to download and inspect.
-        uses: actions/upload-artifact@v4
+      - name: 6. Upload Artifact
+        # This uploads the 'dist' folder for the deploy job to use
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: deployment-debug-files
-          path: .
-          if-no-files-found: warn
-          
-# The 'deploy' job is TEMPORARILY REMOVED to focus only on the build error.
+          path: './dist' 
+
+  # 2. Deploy Job: Takes the artifact and publishes it
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build # Crucially waits for the 'build' job to finish
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
