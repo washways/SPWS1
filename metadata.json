@@ -1,6 +1,6 @@
 {
   "name": "SiteSpecific Malawi SPWS vs Handpump Economic Comparison",
-  "description": "A Site Specific economic comparison tool for rural water supply systems in Malawi (Solar Piped vs. Handpumps), featuring lifecycle cost analysis, AI-driven feasibility insights, and interactive site mapping.",
+  "description": "A Site Specific economic comparison tool for rural water supply systems in Malawi (Solar Piped vs. Handpumps), featuring lifecycle cost analysis, automated feasibility insights, and interactive site mapping.",
   "requestFramePermissions": [
     "geolocation"
   ]
