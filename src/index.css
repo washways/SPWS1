@@ -1,4 +1,24 @@
-/* src/index.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #f3f4f6;
+}
+
+/* Fix for Leaflet cursor in some environments */
+.leaflet-container {
+  cursor: crosshair;
+}
+
+/* PDF Page Break Helpers */
+.page-break {
+  page-break-before: always;
+}
+
+.html2pdf__page-break {
+  page-break-before: always;
+}
