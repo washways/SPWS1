@@ -298,7 +298,7 @@ export const SystemSchematic: React.FC<SystemSchematicProps> = ({ inputs, specs,
                                     <div className="flex justify-between items-center mb-2">
                                         <h4 className="text-sm font-bold text-gray-700">{profile.name}</h4>
                                         <div className="flex gap-2 text-xs">
-                                            {hasHighPressure && <span className="px-2 py-1 bg-red-100 text-red-700 rounded font-bold flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> High Pressure (>100m)</span>}
+                                            {hasHighPressure && <span className="px-2 py-1 bg-red-100 text-red-700 rounded font-bold flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> High Pressure (&gt; 100m)</span>}
                                             {hasNegativePressure && <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded font-bold flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> Air-Lock Risk (Neg Pressure)</span>}
                                         </div>
                                     </div>
