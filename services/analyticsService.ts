@@ -4,7 +4,7 @@ import { DashboardStats, ReportLog } from "../types";
 const SESSION_START_KEY = "mw_tool_session_start";
 
 export const AnalyticsService = {
-  
+
   // 1. Session Management
   startSession: () => {
     sessionStorage.setItem(SESSION_START_KEY, Date.now().toString());
@@ -17,7 +17,7 @@ export const AnalyticsService = {
     return Math.round(diff / 1000); // Seconds
   },
 
-  // 2. Log Generation (Send to Python Backend)
+  // 2. Log Generation (Send to Express Backend)
   logReport: async (logData: Omit<ReportLog, 'id' | 'timestamp' | 'timeSpentSeconds'>) => {
     try {
       const payload = {
@@ -25,8 +25,7 @@ export const AnalyticsService = {
         timeSpentSeconds: AnalyticsService.getSessionDuration()
       };
 
-      // Assuming the Flask app is running on the same host or proxied via /api
-      const response = await fetch('http://localhost:5000/api/log_report', {
+      const response = await fetch('http://localhost:3001/api/log_report', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -37,8 +36,8 @@ export const AnalyticsService = {
       if (!response.ok) {
         throw new Error('Network response was not ok');
       }
-      
-      console.log("Analytics: Report logged to server CSV");
+
+      console.log("Analytics: Report logged to server");
     } catch (e) {
       // Graceful degradation - don't block the user if analytics fails
       console.warn("Analytics: Failed to log report (Server might be offline)", e);
@@ -48,39 +47,39 @@ export const AnalyticsService = {
   // 3. Feedback Submission
   sendFeedback: async (message: string) => {
     try {
-        const response = await fetch('http://localhost:5000/api/feedback', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message })
-        });
-        if (!response.ok) throw new Error('Failed to send feedback');
+      const response = await fetch('http://localhost:3001/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      });
+      if (!response.ok) throw new Error('Failed to send feedback');
     } catch (e) {
-        console.error("Feedback error", e);
-        throw e;
+      console.error("Feedback error", e);
+      throw e;
     }
   },
 
-  // 4. Analytics Retrieval (Get from Python Backend)
+  // 4. Analytics Retrieval (Get from Express Backend)
   getDashboardStats: async (): Promise<DashboardStats> => {
     try {
-      const response = await fetch('http://localhost:5000/api/get_stats');
+      const response = await fetch('http://localhost:3001/api/get_stats');
       if (!response.ok) throw new Error('Failed to fetch stats');
-      
+
       const rawLogs: any[] = await response.json();
-      
+
       // Map CSV keys to Frontend Types
       const logs: ReportLog[] = rawLogs.map((row: any) => ({
-        id: Math.random().toString(36), // CSV doesn't have ID, generate one for React key
+        id: row.id || Math.random().toString(36),
         timestamp: row.timestamp,
         siteName: row.site_name,
         contractNumber: row.contract_number,
-        location: { lat: 0, lng: 0 }, 
+        location: { lat: 0, lng: 0 },
         population: row.population_initial,
         designPopulation: row.population_design,
         systemType: row.system_type,
         solarCapex: row.solar_capex,
         handpumpCapex: row.handpump_capex,
-        solarNetValue: parseFloat(row.solar_net_value) || 0, 
+        solarNetValue: parseFloat(row.solar_net_value) || 0,
         handpumpNetValue: parseFloat(row.handpump_net_value) || 0,
         winner: row.winner,
         timeSpentSeconds: row.time_spent_seconds

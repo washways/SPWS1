@@ -1,0 +1,49 @@
+{
+  "reports": [
+    {
+      "id": "pnh7cdgcq",
+      "timestamp": "2025-11-30T20:37:45.324Z",
+      "siteName": "up notrth",
+      "contractNumber": "",
+      "location": {
+        "lat": -10.872503392458855,
+        "lng": 33.84407043457032
+      },
+      "population": 1499,
+      "designPopulation": 2456,
+      "systemType": "Mixed",
+      "solarCapex": 129577,
+      "handpumpCapex": 39000,
+      "solarNetValue": 414998.20636296785,
+      "handpumpNetValue": 394105.03171408403,
+      "winner": "Solar",
+      "timeSpentSeconds": 88
+    },
+    {
+      "id": "7ttubnkk2",
+      "timestamp": "2025-11-30T20:06:53.573Z",
+      "siteName": "blantyre",
+      "contractNumber": "test",
+      "location": {
+        "lat": -15.369363702685021,
+        "lng": 35.34250259399415
+      },
+      "population": 2000,
+      "designPopulation": 3277,
+      "systemType": "Mixed",
+      "solarCapex": 87397,
+      "handpumpCapex": 52000,
+      "solarNetValue": 633339.8049262178,
+      "handpumpNetValue": 337205.1079791049,
+      "winner": "Solar",
+      "timeSpentSeconds": 64
+    }
+  ],
+  "feedback": [
+    {
+      "id": "ugxpv8zyh",
+      "timestamp": "2025-11-30T20:36:24.320Z",
+      "message": "is this workign now"
+    }
+  ]
+}
