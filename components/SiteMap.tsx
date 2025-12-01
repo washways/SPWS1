@@ -435,12 +435,48 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         fetchAndDisplayOSMBuildings();
     }, [showOSMBuildings]);
 
-    // Google Buildings Layer (Production placeholder)
+    // Google Buildings Layer (PMTiles - Production)
     useEffect(() => {
-        if (showGoogleBuildings) {
-            alert('Google Buildings layer is available in production deployment only.\n\nFor local development, use OSM Buildings instead.\n\nSee deployment notes for upgrading to Google Open Buildings PMTiles.');
-            setShowGoogleBuildings(false);
-        }
+        if (!mapInstanceRef.current || !showGoogleBuildings) return;
+
+        const loadGoogleBuildings = async () => {
+            try {
+                // Dynamically import PMTiles libraries
+                const { PMTiles } = await import('pmtiles');
+                const { protomapsL } = await import('protomaps-leaflet');
+
+                const PMTILES_URL = 'https://data.source.coop/vida/google-microsoft-osm-open-buildings/pmtiles/go_ms_osm_open_buildings.pmtiles';
+
+                const p = new PMTiles(PMTILES_URL);
+
+                // Register the PMTiles protocol
+                protomapsL.leafletLayer({
+                    url: p,
+                    paint_rules: [
+                        {
+                            dataLayer: "buildings",
+                            symbolizer: new protomapsL.PolygonSymbolizer({
+                                fill: "#3b82f6",
+                                opacity: 0.3
+                            })
+                        }
+                    ]
+                }).addTo(mapInstanceRef.current);
+
+                console.log('Google Buildings (PMTiles) loaded successfully');
+            } catch (error) {
+                console.error('Failed to load Google Buildings:', error);
+                alert('Google Buildings layer failed to load. Using OSM Buildings instead.');
+                setShowGoogleBuildings(false);
+                setShowOSMBuildings(true);
+            }
+        };
+
+        loadGoogleBuildings();
+
+        return () => {
+            // Cleanup if needed
+        };
     }, [showGoogleBuildings]);
 
     useEffect(() => {
