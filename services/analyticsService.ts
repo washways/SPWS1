@@ -25,7 +25,7 @@ export const AnalyticsService = {
         timeSpentSeconds: AnalyticsService.getSessionDuration()
       };
 
-      const response = await fetch('http://localhost:3001/api/log_report', {
+      const response = await fetch('https://script.google.com/macros/s/AKfycbwwGx6bFqF39NFT5_uFNRumh02righDBnHrmoy0nXI87RjhyCka9sBqAOFGVczZr1Ua3w/exec', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

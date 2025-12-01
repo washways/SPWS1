@@ -64,7 +64,22 @@ const App: React.FC = () => {
             handpumpCapex: summary.capexHandpump,
             solarNetValue: summary.netEconomicValueSolar,
             handpumpNetValue: summary.netEconomicValueHandpump,
-            winner: summary.netEconomicValueSolar > summary.netEconomicValueHandpump ? 'Solar' : 'Handpump'
+            winner: summary.netEconomicValueSolar > summary.netEconomicValueHandpump ? 'Solar' : 'Handpump',
+            // Extended Data
+            hydraulicInputs: hydraulicInputs,
+            systemSpecs: systemSpecs,
+            boqTotal: generatedBoQ.reduce((sum, item) => sum + item.amount, 0),
+            pipelineStats: {
+                risingMain: counts.risingLen,
+                mainLines: counts.mainLen,
+                distribution: counts.distLen
+            },
+            financialParams: {
+                discountRate: global.discountRate,
+                projectLifespan: global.projectLifespan,
+                solarOpex: solar.opexAnnual,
+                handpumpCapexUnit: handpump.capexPerUnit
+            }
         });
         // -------------------------
 

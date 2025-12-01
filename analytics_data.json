@@ -1,6 +1,25 @@
 {
   "reports": [
     {
+      "id": "372hv155g",
+      "timestamp": "2025-12-01T03:50:22.512Z",
+      "siteName": "Maselema",
+      "contractNumber": "",
+      "location": {
+        "lat": -15.66752353684517,
+        "lng": 35.080654621124275
+      },
+      "population": 1300,
+      "designPopulation": 2130,
+      "systemType": "Mixed",
+      "solarCapex": 66163,
+      "handpumpCapex": 39000,
+      "solarNetValue": 409633.3430489985,
+      "handpumpNetValue": 334702.2917206173,
+      "winner": "Solar",
+      "timeSpentSeconds": 228
+    },
+    {
       "id": "pnh7cdgcq",
       "timestamp": "2025-11-30T20:37:45.324Z",
       "siteName": "up notrth",
@@ -40,6 +59,16 @@
     }
   ],
   "feedback": [
+    {
+      "id": "a72be2ac1",
+      "timestamp": "2025-12-01T03:50:36.649Z",
+      "message": "better with buildings"
+    },
+    {
+      "id": "kuo8h4yem",
+      "timestamp": "2025-11-30T21:28:10.890Z",
+      "message": "very nice"
+    },
     {
       "id": "ugxpv8zyh",
       "timestamp": "2025-11-30T20:36:24.320Z",

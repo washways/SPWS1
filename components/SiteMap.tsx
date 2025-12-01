@@ -96,9 +96,18 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     const [searching, setSearching] = useState(false);
 
     // Building Footprints State
-    const [showBuildings, setShowBuildings] = useState(false);
+    const [showOSMBuildings, setShowOSMBuildings] = useState(false);
+    const [showGoogleBuildings, setShowGoogleBuildings] = useState(false);
     const [buildingsLoading, setBuildingsLoading] = useState(false);
-    const buildingLayerRef = useRef<L.LayerGroup | null>(null);
+
+    // Spatial Analysis State
+    const [bufferDistance, setBufferDistance] = useState(50); // meters
+    const [peoplePerBuilding, setPeoplePerBuilding] = useState(5);
+    const [servedPop, setServedPop] = useState(0);
+    const [unservedPop, setUnservedPop] = useState(0);
+    const osmBuildingLayerRef = useRef<L.LayerGroup | null>(null);
+    const visualBufferLayerRef = useRef<L.LayerGroup | null>(null);
+    const googleBuildingLayerRef = useRef<L.LayerGroup | null>(null);
 
     // Sync Ref
     useEffect(() => { currentSegmentRef.current = currentSegment; }, [currentSegment]);
@@ -372,6 +381,67 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     }, []);
 
     useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
+
+    // OSM Buildings Layer
+    useEffect(() => {
+        if (!mapInstanceRef.current) return;
+
+        const fetchAndDisplayOSMBuildings = async () => {
+            if (showOSMBuildings && !osmBuildingLayerRef.current) {
+                setBuildingsLoading(true);
+                try {
+                    const bounds = mapInstanceRef.current!.getBounds();
+                    const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
+                    const query = `[out:json][timeout:25];(way["building"](${bbox}););out geom;`;
+                    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+
+                    const response = await fetch(url);
+                    const data = await response.json();
+
+                    const features = data.elements.map((element: any) => {
+                        if (element.type === 'way' && element.geometry) {
+                            return {
+                                type: 'Feature',
+                                properties: { building: element.tags?.building || 'yes' },
+                                geometry: {
+                                    type: 'Polygon',
+                                    coordinates: [element.geometry.map((node: any) => [node.lon, node.lat])]
+                                }
+                            };
+                        }
+                        return null;
+                    }).filter(Boolean);
+
+                    const geojson = { type: 'FeatureCollection', features: features };
+
+                    const layer = L.geoJSON(geojson as any, {
+                        style: { color: '#3b82f6', weight: 1, fillColor: '#3b82f6', fillOpacity: 0.3 }
+                    });
+
+                    osmBuildingLayerRef.current = layer.addTo(mapInstanceRef.current!);
+                    console.log(`Loaded ${features.length} OSM buildings`);
+                } catch (error) {
+                    console.error('Error fetching OSM buildings:', error);
+                    alert('Failed to load OSM buildings. Try zooming in to a smaller area.');
+                } finally {
+                    setBuildingsLoading(false);
+                }
+            } else if (!showOSMBuildings && osmBuildingLayerRef.current) {
+                osmBuildingLayerRef.current.remove();
+                osmBuildingLayerRef.current = null;
+            }
+        };
+
+        fetchAndDisplayOSMBuildings();
+    }, [showOSMBuildings]);
+
+    // Google Buildings Layer (Production placeholder)
+    useEffect(() => {
+        if (showGoogleBuildings) {
+            alert('Google Buildings layer is available in production deployment only.\n\nFor local development, use OSM Buildings instead.\n\nSee deployment notes for upgrading to Google Open Buildings PMTiles.');
+            setShowGoogleBuildings(false);
+        }
+    }, [showGoogleBuildings]);
 
     useEffect(() => {
         if (!mapInstanceRef.current) return;
@@ -713,6 +783,140 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         </button>
     );
 
+
+    // Spatial Analysis Logic
+    useEffect(() => {
+        if (!osmBuildingLayerRef.current || !mapInstanceRef.current) return;
+
+        // Initialize visual buffer layer if needed
+        if (!visualBufferLayerRef.current) {
+            visualBufferLayerRef.current = L.layerGroup().addTo(mapInstanceRef.current);
+        } else {
+            visualBufferLayerRef.current.clearLayers();
+        }
+
+        let servedCount = 0;
+        let unservedCount = 0;
+
+        // Collect all pipe geometries (EXCLUDING Rising Main as requested)
+        const pipes: L.Polyline[] = [
+            // ...(features.current.risingMain ? [features.current.risingMain] : []), // Excluded
+            ...features.current.mainLines.map(ml => ml.poly),
+            ...features.current.distLines
+        ];
+
+        // Helper: Distance from point P to segment AB in meters
+        const getDistToSegmentMeters = (p: L.LatLng, a: L.LatLng, b: L.LatLng) => {
+            const pLat = p.lat; const pLng = p.lng;
+            const aLat = a.lat; const aLng = a.lng;
+            const bLat = b.lat; const bLng = b.lng;
+
+            let t = ((pLat - aLat) * (bLat - aLat) + (pLng - aLng) * (bLng - aLng)) /
+                ((bLat - aLat) ** 2 + (bLng - aLng) ** 2);
+
+            t = Math.max(0, Math.min(1, t));
+
+            const closestLat = aLat + t * (bLat - aLat);
+            const closestLng = aLng + t * (bLng - aLng);
+            const closest = new L.LatLng(closestLat, closestLng);
+
+            return p.distanceTo(closest);
+        };
+
+        // Helper: Generate buffer polygon around a segment
+        const getBufferPolygon = (p1: L.LatLng, p2: L.LatLng, bufferMeters: number) => {
+            // Calculate offset vectors
+            const dx = p2.lng - p1.lng;
+            const dy = p2.lat - p1.lat;
+            const len = Math.sqrt(dx * dx + dy * dy);
+
+            if (len === 0) return null;
+
+            // Convert meters to approx degrees (rough approximation for visualization)
+            // 1 deg lat ~ 111km, 1 deg lng ~ 111km * cos(lat)
+            const metersPerDegLat = 111132.92;
+            const metersPerDegLng = 111132.92 * Math.cos(p1.lat * (Math.PI / 180));
+
+            const bufferDegLat = bufferMeters / metersPerDegLat;
+            const bufferDegLng = bufferMeters / metersPerDegLng;
+
+            // Perpendicular vector (-dy, dx) normalized
+            const ux = -dy / len;
+            const uy = dx / len;
+
+            // Offset points
+            const offX = ux * bufferDegLng;
+            const offY = uy * bufferDegLat;
+
+            return [
+                [p1.lat + offY, p1.lng + offX],
+                [p2.lat + offY, p2.lng + offX],
+                [p2.lat - offY, p2.lng - offX],
+                [p1.lat - offY, p1.lng - offX]
+            ];
+        };
+
+        if (pipes.length === 0) {
+            // No pipes, all unserved
+            osmBuildingLayerRef.current.eachLayer((layer: any) => {
+                if (layer.setStyle) layer.setStyle({ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.3, weight: 1 });
+                unservedCount++;
+            });
+        } else {
+            // Draw Visual Buffer (Polygons for segments + Circles for joints)
+            pipes.forEach(pipe => {
+                const latlngs = pipe.getLatLngs() as L.LatLng[];
+
+                // Draw circles at vertices (joints)
+                latlngs.forEach(ll => {
+                    L.circle(ll, { radius: bufferDistance, color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
+                });
+
+                // Draw buffer polygons for segments
+                for (let i = 0; i < latlngs.length - 1; i++) {
+                    const polyCoords = getBufferPolygon(latlngs[i], latlngs[i + 1], bufferDistance);
+                    if (polyCoords) {
+                        L.polygon(polyCoords as any, { color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
+                    }
+                }
+            });
+
+            osmBuildingLayerRef.current.eachLayer((layer: any) => {
+                if (layer.feature && layer.feature.geometry.type === 'Polygon') {
+                    const bounds = layer.getBounds();
+                    const center = bounds.getCenter();
+
+                    let isServed = false;
+                    for (const pipe of pipes) {
+                        const pipeLatLngs = pipe.getLatLngs() as L.LatLng[];
+                        for (let i = 0; i < pipeLatLngs.length - 1; i++) {
+                            const dist = getDistToSegmentMeters(center, pipeLatLngs[i], pipeLatLngs[i + 1]);
+                            if (dist <= bufferDistance) {
+                                isServed = true;
+                                break;
+                            }
+                        }
+                        if (isServed) break;
+                    }
+
+                    if (isServed) {
+                        layer.setStyle({ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.5, weight: 2 }); // Green, thicker
+                        servedCount++;
+                    } else {
+                        layer.setStyle({ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.3, weight: 1 }); // Red
+                        unservedCount++;
+                    }
+                }
+            });
+        }
+
+        setServedPop(servedCount * peoplePerBuilding);
+        setUnservedPop(unservedCount * peoplePerBuilding);
+
+    }, [bufferDistance, peoplePerBuilding, showOSMBuildings, buildingsLoading, counts]); // Recalc when pipes change
+
+    // Recalc when pipes change
+
     return (
         <div className="flex flex-col md:flex-row gap-4 h-[calc(100vh-140px)] relative">
 
@@ -742,7 +946,50 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
                 </form>
                 <div className="space-y-4 text-sm">
-                    <div><label className="block text-gray-600 text-xs font-bold mb-1">Target Population</label><input type="number" value={population} onChange={e => setPopulation(parseFloat(e.target.value) || 0)} className="w-full p-2 border rounded" /></div>
+                    {/* Spatial Analysis Inputs */}
+                    <div className="p-2 bg-blue-50 rounded border border-blue-100 mb-2">
+                        <h4 className="font-bold text-blue-800 text-xs mb-2">Service Coverage</h4>
+                        <div className="space-y-2">
+                            <div>
+                                <label className="block text-gray-600 text-xs font-bold mb-1" title="Distance from pipe to be considered served">Service Buffer (m)</label>
+                                <input
+                                    type="number"
+                                    value={bufferDistance}
+                                    onChange={e => setBufferDistance(Math.max(0, parseFloat(e.target.value) || 0))}
+                                    className="w-full p-1.5 border rounded text-xs"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-gray-600 text-xs font-bold mb-1" title="Average people per household/building">People per Building</label>
+                                <input
+                                    type="number"
+                                    value={peoplePerBuilding}
+                                    onChange={e => setPeoplePerBuilding(Math.max(1, parseFloat(e.target.value) || 1))}
+                                    className="w-full p-1.5 border rounded text-xs"
+                                />
+                            </div>
+                            <div className="flex justify-between text-xs pt-1 border-t border-blue-200 mt-1">
+                                <span className="text-green-700 font-bold">Served: {servedPop.toLocaleString()}</span>
+                                <span className="text-red-700 font-bold">Unserved: {unservedPop.toLocaleString()}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-gray-600 text-xs font-bold mb-1">Target Population</label>
+                        <div className="flex gap-2">
+                            <input type="number" value={population} onChange={e => setPopulation(parseFloat(e.target.value) || 0)} className="w-full p-2 border rounded" />
+                            <button
+                                onClick={() => setPopulation(servedPop)}
+                                className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold hover:bg-blue-200 transition"
+                                title={`Sync with Spatial Analysis (Currently Served: ${servedPop.toLocaleString()})`}
+                            >
+                                Sync
+                            </button>
+                        </div>
+                        <div className="text-[10px] text-gray-500 mt-1 text-right">
+                            Spatial Estimate: <strong>{servedPop.toLocaleString()}</strong>
+                        </div>
+                    </div>
                     <div><label className="block text-gray-600 text-xs font-bold mb-1">Borehole Depth (m)</label><input type="number" value={inputs.boreholeDepth} onChange={e => setInputs({ ...inputs, boreholeDepth: parseFloat(e.target.value) || 0 })} className="w-full p-2 border rounded" /></div>
                     <div><label className="block text-gray-600 text-xs font-bold mb-1">Static Water Level (m)</label><input type="number" value={inputs.staticWaterLevel} onChange={e => setInputs({ ...inputs, staticWaterLevel: parseFloat(e.target.value) || 0 })} className="w-full p-2 border rounded" /></div>
                     <div><label className="block text-gray-600 text-xs font-bold mb-1">Tank Stand Height (m)</label>
@@ -763,10 +1010,18 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             <div className="order-1 md:order-2 flex-1 relative min-h-[400px] md:h-full bg-gray-100 rounded-xl overflow-hidden shadow-inner border border-gray-300">
                 <div ref={mapContainerRef} className="w-full h-full z-0 min-h-[400px]" style={{ minHeight: '400px' }} />
                 {loadingElevation && <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow text-xs font-bold text-blue-600 flex items-center gap-2 z-[400]"><Activity className="w-3 h-3 animate-spin" /> Fetching Elevation...</div>}
-                <div className="absolute top-4 right-4 bg-white rounded-lg shadow-md border border-gray-200 p-1 flex z-[400]">
-                    <button onClick={() => setMapStyle('street')} className={`p-1.5 rounded ${mapStyle === 'street' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Street View"><MapIcon className="w-4 h-4 text-gray-700" /></button>
-                    <button onClick={() => setMapStyle('satellite')} className={`p-1.5 rounded ${mapStyle === 'satellite' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Satellite View"><Layers className="w-4 h-4 text-gray-700" /></button>
-                    <button onClick={() => setMapStyle('topo')} className={`p-1.5 rounded ${mapStyle === 'topo' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Terrain/Topography"><Mountain className="w-4 h-4 text-gray-700" /></button>
+                {buildingsLoading && <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow text-xs font-bold text-green-600 flex items-center gap-2 z-[400]"><Activity className="w-3 h-3 animate-spin" /> Loading Buildings...</div>}
+                <div className="absolute top-4 right-4 bg-white rounded-lg shadow-md border border-gray-200 p-1 flex flex-col gap-1 z-[400]">
+                    <div className="flex gap-1">
+                        <button onClick={() => setShowOSMBuildings(!showOSMBuildings)} className={`p-1.5 rounded ${showOSMBuildings ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 text-gray-700'}`} title="OSM Buildings (Development)"><Home className="w-4 h-4" /></button>
+                        <button onClick={() => setShowGoogleBuildings(!showGoogleBuildings)} className={`p-1.5 rounded ${showGoogleBuildings ? 'bg-green-100 text-green-600' : 'hover:bg-gray-100 text-gray-700'}`} title="Google Buildings (Production Only)"><Box className="w-4 h-4" /></button>
+                    </div>
+                    <div className="w-full h-px bg-gray-300"></div>
+                    <div className="flex gap-1">
+                        <button onClick={() => setMapStyle('street')} className={`p-1.5 rounded ${mapStyle === 'street' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Street View"><MapIcon className="w-4 h-4 text-gray-700" /></button>
+                        <button onClick={() => setMapStyle('satellite')} className={`p-1.5 rounded ${mapStyle === 'satellite' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Satellite View"><Layers className="w-4 h-4 text-gray-700" /></button>
+                        <button onClick={() => setMapStyle('topo')} className={`p-1.5 rounded ${mapStyle === 'topo' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Terrain/Topography"><Mountain className="w-4 h-4 text-gray-700" /></button>
+                    </div>
                 </div>
                 <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-white/95 backdrop-blur shadow-xl border border-gray-200 rounded-2xl p-2 flex gap-2 z-[400] max-w-[95%] overflow-x-auto">
                     <ToolButton tool="select" icon={MousePointerClick} label="Select" />
