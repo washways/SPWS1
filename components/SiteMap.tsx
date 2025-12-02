@@ -439,31 +439,41 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     useEffect(() => {
         if (!mapInstanceRef.current || !showGoogleBuildings) return;
 
+        let buildingsLayer: any = null;
+
         const loadGoogleBuildings = async () => {
             try {
-                // Dynamically import PMTiles libraries
+                // Dynamically import PMTiles and protomaps-leaflet
                 const { PMTiles } = await import('pmtiles');
-                const { protomapsL } = await import('protomaps-leaflet');
+                const protomapsLeaflet = await import('protomaps-leaflet');
+
+                // Use the default export or named export
+                const leafletLayer = (protomapsLeaflet as any).leafletLayer || (protomapsLeaflet as any).default?.leafletLayer;
+
+                if (!leafletLayer) {
+                    throw new Error('leafletLayer not found in protomaps-leaflet');
+                }
 
                 const PMTILES_URL = 'https://data.source.coop/vida/google-microsoft-osm-open-buildings/pmtiles/go_ms_osm_open_buildings.pmtiles';
 
                 const p = new PMTiles(PMTILES_URL);
 
-                // Register the PMTiles protocol
-                protomapsL.leafletLayer({
-                    url: p,
-                    paint_rules: [
-                        {
-                            dataLayer: "buildings",
-                            symbolizer: new protomapsL.PolygonSymbolizer({
-                                fill: "#3b82f6",
-                                opacity: 0.3
-                            })
+                // Create the layer with simple configuration
+                buildingsLayer = leafletLayer({
+                    url: PMTILES_URL,
+                    // Use a simple theme - just show buildings in blue
+                    theme: {
+                        buildings: {
+                            fill: '#3b82f6',
+                            opacity: 0.3
                         }
-                    ]
-                }).addTo(mapInstanceRef.current);
+                    }
+                });
 
-                console.log('Google Buildings (PMTiles) loaded successfully');
+                if (mapInstanceRef.current) {
+                    buildingsLayer.addTo(mapInstanceRef.current);
+                    console.log('Google Buildings (PMTiles) loaded successfully');
+                }
             } catch (error) {
                 console.error('Failed to load Google Buildings:', error);
                 alert('Google Buildings layer failed to load. Using OSM Buildings instead.');
@@ -475,7 +485,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         loadGoogleBuildings();
 
         return () => {
-            // Cleanup if needed
+            if (buildingsLayer && mapInstanceRef.current) {
+                mapInstanceRef.current.removeLayer(buildingsLayer);
+            }
         };
     }, [showGoogleBuildings]);
 
