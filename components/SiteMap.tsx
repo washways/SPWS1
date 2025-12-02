@@ -5,6 +5,7 @@ import { Map as MapIcon, Navigation, Trash2, Settings, CheckCircle, Layers, Disc
 import { HydraulicInputs, SystemSpecs, BoQItem, PipelineProfile, SystemGeometry, ProjectDetails } from '../types';
 import { DESIGN_COSTS, INSTITUTIONAL_DEMAND } from '../constants';
 import { PMTiles, Protocol } from 'pmtiles';
+import * as protomapsL from 'protomaps-leaflet';
 
 interface SiteMapProps {
     population: number;
@@ -441,33 +442,13 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
         let buildingsLayer: any = null;
 
-        const loadGoogleBuildings = async () => {
+        const loadGoogleBuildings = () => {
             try {
-                // Dynamically import PMTiles and protomaps-leaflet
-                const { PMTiles } = await import('pmtiles');
-                const protomapsLeaflet = await import('protomaps-leaflet');
-
-                // Use the default export or named export
-                const leafletLayer = (protomapsLeaflet as any).leafletLayer || (protomapsLeaflet as any).default?.leafletLayer;
-
-                if (!leafletLayer) {
-                    throw new Error('leafletLayer not found in protomaps-leaflet');
-                }
-
                 const PMTILES_URL = 'https://data.source.coop/vida/google-microsoft-osm-open-buildings/pmtiles/go_ms_osm_open_buildings.pmtiles';
 
-                const p = new PMTiles(PMTILES_URL);
-
-                // Create the layer with simple configuration
-                buildingsLayer = leafletLayer({
-                    url: PMTILES_URL,
-                    // Use a simple theme - just show buildings in blue
-                    theme: {
-                        buildings: {
-                            fill: '#3b82f6',
-                            opacity: 0.3
-                        }
-                    }
+                // Use protomapsL.leafletLayer like the official CDN example
+                buildingsLayer = protomapsL.leafletLayer({
+                    url: PMTILES_URL
                 });
 
                 if (mapInstanceRef.current) {

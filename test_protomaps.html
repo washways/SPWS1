@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/pmtiles@3.0.7/dist/pmtiles.js"></script>
+    <script src="https://unpkg.com/protomaps-leaflet@5.1.0/dist/protomaps-leaflet.js"></script>
+    <style>
+        body,
+        #map {
+            height: 100vh;
+            margin: 0px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <script>
+        const map = L.map('map').setView([-13.25, 34.3], 7);
+
+        // Test Google Buildings PMTiles
+        const PMTILES_URL = 'https://data.source.coop/vida/google-microsoft-osm-open-buildings/pmtiles/go_ms_osm_open_buildings.pmtiles';
+
+        var layer = protomapsL.leafletLayer({
+            url: PMTILES_URL,
+            theme: {
+                buildings: {
+                    fill: '#3b82f6',
+                    opacity: 0.3
+                }
+            }
+        });
+        layer.addTo(map);
+
+        console.log('Google Buildings layer added successfully');
+    </script>
+</body>
+
+</html>
