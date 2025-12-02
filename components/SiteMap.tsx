@@ -444,7 +444,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
         const loadGoogleBuildings = () => {
             try {
-                const PMTILES_URL = 'https://data.source.coop/vida/google-microsoft-osm-open-buildings/pmtiles/go_ms_osm_open_buildings.pmtiles';
+                const PMTILES_URL = 'https://data.source.coop/vida/google-microsoft-open-buildings/pmtiles/go_ms_building_footprints.pmtiles';
 
                 // Use protomapsL.leafletLayer like the official CDN example
                 buildingsLayer = protomapsL.leafletLayer({
