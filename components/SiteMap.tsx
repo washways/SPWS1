@@ -446,9 +446,21 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             try {
                 const PMTILES_URL = 'https://data.source.coop/vida/google-microsoft-open-buildings/pmtiles/go_ms_building_footprints.pmtiles';
 
-                // Use protomapsL.leafletLayer like the official CDN example
+                // Use protomapsL.leafletLayer with paint rules for visibility
                 buildingsLayer = protomapsL.leafletLayer({
-                    url: PMTILES_URL
+                    url: PMTILES_URL,
+                    paintRules: [
+                        {
+                            dataLayer: "default",
+                            symbolizer: new protomapsL.PolygonSymbolizer({
+                                fill: "#3b82f6",
+                                opacity: 0.5,
+                                stroke: "#1e40af",
+                                width: 1
+                            })
+                        }
+                    ],
+                    labelRules: []
                 });
 
                 if (mapInstanceRef.current) {
