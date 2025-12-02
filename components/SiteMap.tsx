@@ -240,12 +240,13 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
         mapInstanceRef.current = map;
         L.control.zoom({ position: 'topright' }).addTo(map);
+        L.control.scale({ position: 'bottomleft', metric: true, imperial: false }).addTo(map);
 
         // Initial layer based on state (street)
         const url = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
         L.tileLayer(url, {
             attribution: 'Map data',
-            maxZoom: 19,
+            maxZoom: 22,
             crossOrigin: true
         }).addTo(map);
 
@@ -503,7 +504,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         // Update TileLayer with crossOrigin for PDF export compatibility
         L.tileLayer(url, {
             attribution: mapStyle === 'topo' ? 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)' : 'Map data',
-            maxZoom: 17,
+            maxZoom: 22,
             crossOrigin: true
         }).addTo(mapInstanceRef.current);
     }, [mapStyle]);
