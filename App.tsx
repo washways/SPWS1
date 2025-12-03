@@ -64,22 +64,7 @@ const App: React.FC = () => {
             handpumpCapex: summary.capexHandpump,
             solarNetValue: summary.netEconomicValueSolar,
             handpumpNetValue: summary.netEconomicValueHandpump,
-            winner: summary.netEconomicValueSolar > summary.netEconomicValueHandpump ? 'Solar' : 'Handpump',
-            // Extended Data
-            hydraulicInputs: hydraulicInputs,
-            systemSpecs: systemSpecs,
-            boqTotal: generatedBoQ.reduce((sum, item) => sum + item.amount, 0),
-            pipelineStats: {
-                risingMain: counts.risingLen,
-                mainLines: counts.mainLen,
-                distribution: counts.distLen
-            },
-            financialParams: {
-                discountRate: global.discountRate,
-                projectLifespan: global.projectLifespan,
-                solarOpex: solar.opexAnnual,
-                handpumpCapexUnit: handpump.capexPerUnit
-            }
+            winner: summary.netEconomicValueSolar > summary.netEconomicValueHandpump ? 'Solar' : 'Handpump'
         });
         // -------------------------
 
@@ -131,11 +116,11 @@ const App: React.FC = () => {
             />
 
             {/* Header */}
-            <header className="bg-slate-900 text-white shadow-lg">
+            <header className="bg-[#003E5E] text-white shadow-lg">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
                     <div className="flex justify-between items-center">
                         <div className="flex items-center space-x-3">
-                            <div className="bg-blue-600 p-2 rounded-lg"><Droplets className="w-6 h-6 text-white" /></div>
+                            <div className="bg-[#1CABE2] p-2 rounded-lg"><Droplets className="w-6 h-6 text-white" /></div>
                             <div><h1 className="text-xl font-bold tracking-tight">Malawi Water Supply Comparison</h1><p className="text-xs text-slate-400">Site Specific Economic Feasibility Tool</p></div>
                         </div>
                         <div className="flex gap-2">
@@ -145,10 +130,10 @@ const App: React.FC = () => {
                             <button onClick={() => window.location.reload()} className="px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition text-slate-300 hover:bg-slate-800" title="Start New Analysis">
                                 <RefreshCw className="w-4 h-4" /> New Analysis
                             </button>
-                            <button onClick={() => setActiveTab('map')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition ${activeTab === 'map' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><MapIcon className="w-4 h-4" /> Design Map</button>
-                            <button onClick={() => setActiveTab('schematic')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition ${activeTab === 'schematic' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><ClipboardList className="w-4 h-4" /> Schematic & BoQ</button>
-                            <button onClick={() => setActiveTab('analysis')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition ${activeTab === 'analysis' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><TrendingUp className="w-4 h-4" /> Economic Analysis</button>
-                            <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition ${activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Database className="w-4 h-4" /> Dashboard</button>
+                            <button onClick={() => setActiveTab('map')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition ${activeTab === 'map' ? 'bg-[#1CABE2] text-white' : 'text-slate-300 hover:bg-slate-800'}`}><MapIcon className="w-4 h-4" /> Design Map</button>
+                            <button onClick={() => setActiveTab('schematic')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition ${activeTab === 'schematic' ? 'bg-[#1CABE2] text-white' : 'text-slate-300 hover:bg-slate-800'}`}><ClipboardList className="w-4 h-4" /> Schematic & BoQ</button>
+                            <button onClick={() => setActiveTab('analysis')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition ${activeTab === 'analysis' ? 'bg-[#1CABE2] text-white' : 'text-slate-300 hover:bg-slate-800'}`}><TrendingUp className="w-4 h-4" /> Economic Analysis</button>
+                            <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition ${activeTab === 'dashboard' ? 'bg-[#1CABE2] text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Database className="w-4 h-4" /> Dashboard</button>
                         </div>
                     </div>
                 </div>
@@ -160,7 +145,7 @@ const App: React.FC = () => {
                 <div className={activeTab === 'map' ? 'block' : 'hidden'}>
                     <div className="mb-6 bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
                         <div className="flex items-center gap-2 mb-3">
-                            <Info className="w-5 h-5 text-blue-600" />
+                            <Info className="w-5 h-5 text-[#1CABE2]" />
                             <h3 className="font-bold text-gray-800 text-lg">System Design Instructions</h3>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-sm text-gray-600">
