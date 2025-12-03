@@ -5,7 +5,7 @@ import { Map as MapIcon, Navigation, Trash2, Settings, CheckCircle, Layers, Disc
 import { HydraulicInputs, SystemSpecs, BoQItem, PipelineProfile, SystemGeometry, ProjectDetails } from '../types';
 import { DESIGN_COSTS, INSTITUTIONAL_DEMAND } from '../constants';
 import { PMTiles, Protocol } from 'pmtiles';
-import * as protomapsL from 'protomaps-leaflet';
+import 'leaflet.vectorgrid';
 
 interface SiteMapProps {
     population: number;
@@ -99,6 +99,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     // Building Footprints State
     const [showOSMBuildings, setShowOSMBuildings] = useState(false);
     const [showGoogleBuildings, setShowGoogleBuildings] = useState(false);
+    const [selectedCountry, setSelectedCountry] = useState('MWI'); // Default to Malawi
     const [buildingsLoading, setBuildingsLoading] = useState(false);
 
     // Spatial Analysis State
@@ -443,35 +444,56 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
         let buildingsLayer: any = null;
 
-        const loadGoogleBuildings = () => {
+        const loadGoogleBuildings = async () => {
             try {
-                const PMTILES_URL = 'https://data.source.coop/vida/google-microsoft-open-buildings/pmtiles/go_ms_building_footprints.pmtiles';
+                // Dynamic URL based on selected country
+                const PMTILES_URL = `https://data.source.coop/vida/google-microsoft-open-buildings/pmtiles/by_country/country_iso=${selectedCountry}/${selectedCountry}.pmtiles`;
 
-                // Use protomapsL.leafletLayer with UNICEF brand colors
-                buildingsLayer = protomapsL.leafletLayer({
-                    url: PMTILES_URL,
-                    paintRules: [
-                        {
-                            symbolizer: new protomapsL.PolygonSymbolizer({
-                                fill: "#1CABE2",      // UNICEF Cyan
-                                opacity: 0.4,
-                                stroke: "#003E5E",     // UNICEF Dark Blue
-                                width: 1
-                            })
+                console.log(`Loading Google Buildings for ${selectedCountry}: ${PMTILES_URL}`);
+
+                // Use Leaflet.VectorGrid for simpler rendering of country-specific PMTiles
+                // @ts-ignore - VectorGrid types are missing
+                buildingsLayer = L.vectorGrid.protobuf(PMTILES_URL, {
+                    vectorTileLayerStyles: {
+                        // Style all features in the vector tile
+                        'default': {
+                            fill: true,
+                            fillColor: '#1CABE2',  // UNICEF Cyan
+                            fillOpacity: 0.4,
+                            stroke: true,
+                            color: '#003E5E',       // UNICEF Dark Blue
+                            weight: 1
+                        },
+                        // Some tiles might use the layer name matching the file or 'building_footprints'
+                        [selectedCountry]: {
+                            fill: true,
+                            fillColor: '#1CABE2',
+                            fillOpacity: 0.4,
+                            stroke: true,
+                            color: '#003E5E',
+                            weight: 1
+                        },
+                        'building_footprints': {
+                            fill: true,
+                            fillColor: '#1CABE2',
+                            fillOpacity: 0.4,
+                            stroke: true,
+                            color: '#003E5E',
+                            weight: 1
                         }
-                    ],
-                    labelRules: [],
-                    maxDataZoom: 15,
-                    maxZoom: 22
+                    },
+                    interactive: false, // Performance optimization
+                    maxNativeZoom: 15,  // PMTiles often max out around 14-15
+                    maxZoom: 22         // Allow overzooming
                 });
 
                 if (mapInstanceRef.current) {
                     buildingsLayer.addTo(mapInstanceRef.current);
-                    console.log('Google Buildings (PMTiles) loaded successfully');
+                    console.log(`Google Buildings (${selectedCountry}) loaded successfully`);
                 }
             } catch (error) {
                 console.error('Failed to load Google Buildings:', error);
-                alert('Google Buildings layer failed to load. Using OSM Buildings instead.');
+                alert(`Google Buildings failed to load for ${selectedCountry}. Try OSM Buildings.`);
                 setShowGoogleBuildings(false);
                 setShowOSMBuildings(true);
             }
@@ -1046,7 +1068,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     <div className="flex justify-between"><span>Institutions:</span><span className="font-bold">{counts.schools + counts.clinics + counts.gardens}</span></div>
                     <div className="flex justify-between border-t border-slate-600 pt-2"><span>Total Pipe:</span><span className="font-bold">{(counts.risingLen + counts.mainLen + counts.distLen).toLocaleString()} m</span></div>
                 </div>
-                <button onClick={handleApply} disabled={!counts.hasBh || !counts.hasTank} className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow transition flex items-center justify-center gap-2"><CheckCircle className="w-4 h-4" /> Apply Design</button>
+                <button onClick={handleApply} disabled={!counts.hasBh || !counts.hasTank} className="w-full py-3 bg-[#1CABE2] hover:bg-[#003E5E] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow transition flex items-center justify-center gap-2"><CheckCircle className="w-4 h-4" /> Apply Design</button>
             </div>
 
             {/* 2. MAP AREA */}
@@ -1056,9 +1078,28 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 {buildingsLoading && <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow text-xs font-bold text-green-600 flex items-center gap-2 z-[400]"><Activity className="w-3 h-3 animate-spin" /> Loading Buildings...</div>}
                 <div className="absolute top-4 right-4 bg-white rounded-lg shadow-md border border-gray-200 p-1 flex flex-col gap-1 z-[400]">
                     <div className="flex gap-1">
-                        <button onClick={() => setShowOSMBuildings(!showOSMBuildings)} className={`p-1.5 rounded ${showOSMBuildings ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 text-gray-700'}`} title="OSM Buildings (Development)"><Home className="w-4 h-4" /></button>
-                        <button onClick={() => setShowGoogleBuildings(!showGoogleBuildings)} className={`p-1.5 rounded ${showGoogleBuildings ? 'bg-green-100 text-green-600' : 'hover:bg-gray-100 text-gray-700'}`} title="Google Buildings (Production Only)"><Box className="w-4 h-4" /></button>
+                        <button onClick={() => setShowOSMBuildings(!showOSMBuildings)} className={`p-1.5 rounded ${showOSMBuildings ? 'bg-[#1CABE2]/20 text-[#003E5E]' : 'hover:bg-gray-100 text-gray-700'}`} title="OSM Buildings (Development)"><Home className="w-4 h-4" /></button>
+                        <button onClick={() => setShowGoogleBuildings(!showGoogleBuildings)} className={`p-1.5 rounded ${showGoogleBuildings ? 'bg-[#1CABE2]/20 text-[#003E5E]' : 'hover:bg-gray-100 text-gray-700'}`} title="Google Buildings (Production Only)"><Box className="w-4 h-4" /></button>
                     </div>
+                    {showGoogleBuildings && (
+                        <div className="px-1 pb-1">
+                            <select
+                                value={selectedCountry}
+                                onChange={(e) => setSelectedCountry(e.target.value)}
+                                className="w-full text-[10px] p-1 border rounded bg-gray-50 text-gray-700 font-medium focus:outline-none focus:border-[#1CABE2]"
+                                title="Select Country for Google Buildings"
+                            >
+                                <option value="MWI">Malawi (MWI)</option>
+                                <option value="ZMB">Zambia (ZMB)</option>
+                                <option value="TZA">Tanzania (TZA)</option>
+                                <option value="MOZ">Mozambique (MOZ)</option>
+                                <option value="UGA">Uganda (UGA)</option>
+                                <option value="KEN">Kenya (KEN)</option>
+                                <option value="RWA">Rwanda (RWA)</option>
+                                <option value="ZWE">Zimbabwe (ZWE)</option>
+                            </select>
+                        </div>
+                    )}
                     <div className="w-full h-px bg-gray-300"></div>
                     <div className="flex gap-1">
                         <button onClick={() => setMapStyle('street')} className={`p-1.5 rounded ${mapStyle === 'street' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Street View"><MapIcon className="w-4 h-4 text-gray-700" /></button>
