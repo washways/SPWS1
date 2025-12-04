@@ -498,7 +498,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     },
                     maxNativeZoom: 14,  // Match PMTiles metadata maxzoom
                     maxZoom: 22,
-                    interactive: false
+                    interactive: false,
+                    rendererFactory: (L as any).canvas,
+                    pane: 'overlayPane'
                 });
 
                 // Override the tile fetcher to use PMTiles
