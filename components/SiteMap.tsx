@@ -490,10 +490,10 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                         [selectedCountry]: {
                             fill: true,
                             fillColor: '#1CABE2',  // UNICEF Cyan
-                            fillOpacity: 0.4,
+                            fillOpacity: 0.7,  // Increased for visibility
                             stroke: true,
                             color: '#003E5E',       // UNICEF Dark Blue
-                            weight: 1
+                            weight: 2  // Thicker stroke for visibility
                         }
                     },
                     maxNativeZoom: 14,  // Match PMTiles metadata maxzoom
@@ -517,7 +517,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
                 if (mapInstanceRef.current) {
                     buildingsLayer.addTo(mapInstanceRef.current);
+                    buildingsLayer.setZIndex(1000); // Ensure buildings are on top
                     console.log(`Google Buildings (${selectedCountry}) loaded successfully`);
+                    console.log('Buildings layer z-index:', buildingsLayer.options.zIndex);
                 }
             } catch (error) {
                 console.error('Failed to load Google Buildings:', error);
