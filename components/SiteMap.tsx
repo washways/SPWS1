@@ -471,22 +471,30 @@ useEffect(() => {
 
     const loadGoogleBuildings = async () => {
         try {
-            const pmtilesUrl = `https://data.source.coop/vida/google-microsoft-open-buildings/pmtiles/go_buildings_${selectedCountry}.pmtiles`;
+            // Correct PMTiles URL format from source.coop
+            const pmtilesUrl = `https://data.source.coop/vida/google-microsoft-open-buildings/pmtiles/by_country/country_iso=${selectedCountry}/${selectedCountry}.pmtiles`;
+
+            console.log(`Loading Google Buildings for ${selectedCountry}: ${pmtilesUrl}`);
 
             // Create vector grid layer with UNICEF styling
+            // Use a function to style all layers (wildcard pattern)
             buildingsLayer = (L as any).vectorGrid.protobuf(pmtilesUrl, {
                 vectorTileLayerStyles: {
-                    'buildings': {
-                        fill: true,
-                        fillColor: '#1CABE2',  // UNICEF Cyan
-                        fillOpacity: 0.4,
-                        stroke: true,
-                        color: '#003E5E',       // UNICEF Dark Blue
-                        weight: 1
+                    // This function will be called for every layer in the PMTiles
+                    '': function () {
+                        return {
+                            fill: true,
+                            fillColor: '#1CABE2',  // UNICEF Cyan
+                            fillOpacity: 0.4,
+                            stroke: true,
+                            color: '#003E5E',       // UNICEF Dark Blue
+                            weight: 1
+                        };
                     }
                 },
                 maxNativeZoom: 15,
-                maxZoom: 22
+                maxZoom: 22,
+                interactive: false  // Buildings are not clickable
             });
 
             if (mapInstanceRef.current) {
@@ -1061,25 +1069,6 @@ return (
                     <button onClick={() => setShowOSMBuildings(!showOSMBuildings)} className={`p-1.5 rounded ${showOSMBuildings ? 'bg-[#1CABE2]/20 text-[#003E5E]' : 'hover:bg-gray-100 text-gray-700'}`} title="OSM Buildings (Development)"><Home className="w-4 h-4" /></button>
                     <button onClick={() => setShowGoogleBuildings(!showGoogleBuildings)} className={`p-1.5 rounded ${showGoogleBuildings ? 'bg-[#1CABE2]/20 text-[#003E5E]' : 'hover:bg-gray-100 text-gray-700'}`} title="Google Buildings (Production Only)"><Box className="w-4 h-4" /></button>
                 </div>
-                {showGoogleBuildings && (
-                    <div className="px-1 pb-1">
-                        <select
-                            value={selectedCountry}
-                            onChange={(e) => setSelectedCountry(e.target.value)}
-                            className="w-full text-[10px] p-1 border rounded bg-gray-50 text-gray-700 font-medium focus:outline-none focus:border-[#1CABE2]"
-                            title="Select Country for Google Buildings"
-                        >
-                            <option value="MWI">Malawi (MWI)</option>
-                            <option value="ZMB">Zambia (ZMB)</option>
-                            <option value="TZA">Tanzania (TZA)</option>
-                            <option value="MOZ">Mozambique (MOZ)</option>
-                            <option value="UGA">Uganda (UGA)</option>
-                            <option value="KEN">Kenya (KEN)</option>
-                            <option value="RWA">Rwanda (RWA)</option>
-                            <option value="ZWE">Zimbabwe (ZWE)</option>
-                        </select>
-                    </div>
-                )}
                 <div className="w-full h-px bg-gray-300"></div>
                 <div className="flex gap-1">
                     <button onClick={() => setMapStyle('street')} className={`p-1.5 rounded ${mapStyle === 'street' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Street View"><MapIcon className="w-4 h-4 text-gray-700" /></button>
