@@ -499,12 +499,17 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
                 // Override the tile fetcher to use PMTiles
                 buildingsLayer._getVectorTilePromise = async function (coords: any) {
-                    const result = await p.getZxy(coords.z, coords.x, coords.y);
-                    if (result && result.data) {
-                        return result.data; // ArrayBuffer
+                    try {
+                        const result = await p.getZxy(coords.z, coords.x, coords.y);
+                        if (result && result.data) {
+                            return result.data; // ArrayBuffer
+                        }
+                        // Return empty ArrayBuffer for missing tiles (no error spam)
+                        return new ArrayBuffer(0);
+                    } catch (error) {
+                        // Silently handle errors - return empty buffer
+                        return new ArrayBuffer(0);
                     }
-                    // Throw error for missing tiles instead of returning null
-                    throw new Error(`Tile not found: ${coords.z}/${coords.x}/${coords.y}`);
                 };
 
                 if (mapInstanceRef.current) {
