@@ -4,8 +4,8 @@ import * as L from 'leaflet';
 import { Map as MapIcon, Navigation, Trash2, Settings, CheckCircle, Layers, Disc, Box, Spline, CircleDot, Activity, MousePointerClick, User, Users, Eraser, Search, FileText, Hash, GraduationCap, Stethoscope, Sprout, Zap, Mountain, Home } from 'lucide-react';
 import { HydraulicInputs, SystemSpecs, BoQItem, PipelineProfile, SystemGeometry, ProjectDetails } from '../types';
 import { DESIGN_COSTS, INSTITUTIONAL_DEMAND } from '../constants';
-import { PMTiles, Protocol } from 'pmtiles';
-import 'leaflet.vectorgrid';
+import { PMTiles } from 'pmtiles';
+import { protomapsL } from 'protomaps-leaflet';
 
 interface SiteMapProps {
     population: number;
@@ -475,43 +475,29 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 const pmtilesUrl = `https://data.source.coop/vida/google-microsoft-open-buildings/pmtiles/by_country/country_iso=${selectedCountry}/${selectedCountry}.pmtiles`;
                 console.log(`Loading Google Buildings for ${selectedCountry}: ${pmtilesUrl}`);
 
-                // Initialize PMTiles instance
-                const p = new PMTiles(pmtilesUrl);
-
-                // Create vector grid layer
-                // We pass the URL but we'll override the fetcher
-                buildingsLayer = (L as any).vectorGrid.protobuf(pmtilesUrl, {
-                    vectorTileLayerStyles: {
-                        '': function () {
-                            return {
-                                fill: true,
-                                fillColor: '#1CABE2',  // UNICEF Cyan
-                                fillOpacity: 0.4,
-                                stroke: true,
-                                color: '#003E5E',       // UNICEF Dark Blue
-                                weight: 1
-                            };
+                // Use protomaps-leaflet for proper PMTiles support
+                buildingsLayer = protomapsL({
+                    url: pmtilesUrl,
+                    paint_rules: [
+                        {
+                            dataLayer: '',  // Match all layers
+                            symbolizer: new protomapsL.PolygonSymbolizer({
+                                fill: '#1CABE2',  // UNICEF Cyan
+                                opacity: 0.4
+                            }),
+                            filter: () => true
+                        },
+                        {
+                            dataLayer: '',  // Match all layers
+                            symbolizer: new protomapsL.LineSymbolizer({
+                                color: '#003E5E',  // UNICEF Dark Blue
+                                width: 1
+                            }),
+                            filter: () => true
                         }
-                    },
-                    maxNativeZoom: 15,
-                    maxZoom: 22,
-                    interactive: false
+                    ],
+                    maxDataZoom: 15
                 });
-
-                // Override the tile fetcher to use PMTiles
-                // This bypasses the need for protocol registration and handles the archive correctly
-                buildingsLayer._getVectorTilePromise = async function (coords: any) {
-                    try {
-                        const result = await p.getZxy(coords.z, coords.x, coords.y);
-                        if (result) {
-                            return result.data; // ArrayBuffer
-                        }
-                    } catch (e) {
-                        // Tile missing or error, return null to skip
-                        return null;
-                    }
-                    return null;
-                };
 
                 if (mapInstanceRef.current) {
                     buildingsLayer.addTo(mapInstanceRef.current);
