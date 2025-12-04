@@ -481,6 +481,8 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 // Log metadata to see what's in the file
                 const metadata = await p.getMetadata();
                 console.log('PMTiles metadata:', metadata);
+                console.log('Vector layers:', metadata.vector_layers);
+                console.log('Using layer name:', selectedCountry);
 
                 // Create vector grid layer targeting the specific country layer
                 buildingsLayer = (L as any).vectorGrid.protobuf(pmtilesUrl, {
