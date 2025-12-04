@@ -469,26 +469,46 @@ useEffect(() => {
 
     let buildingsLayer: any = null;
 
-    if (mapInstanceRef.current) {
-        buildingsLayer.addTo(mapInstanceRef.current);
-        console.log(`Google Buildings (${selectedCountry}) loaded successfully`);
-    }
-} catch (error) {
-    console.error('Failed to load Google Buildings:', error);
-    alert(`Google Buildings failed to load for ${selectedCountry}. Try OSM Buildings.`);
-    setShowGoogleBuildings(false);
-    setShowOSMBuildings(true);
-}
-        };
+    const loadGoogleBuildings = async () => {
+        try {
+            const pmtilesUrl = `https://data.source.coop/vida/google-microsoft-open-buildings/pmtiles/go_buildings_${selectedCountry}.pmtiles`;
 
-loadGoogleBuildings();
+            // Create vector grid layer with UNICEF styling
+            buildingsLayer = (L as any).vectorGrid.protobuf(pmtilesUrl, {
+                vectorTileLayerStyles: {
+                    'buildings': {
+                        fill: true,
+                        fillColor: '#1CABE2',  // UNICEF Cyan
+                        fillOpacity: 0.4,
+                        stroke: true,
+                        color: '#003E5E',       // UNICEF Dark Blue
+                        weight: 1
+                    }
+                },
+                maxNativeZoom: 15,
+                maxZoom: 22
+            });
 
-return () => {
-    if (buildingsLayer && mapInstanceRef.current) {
-        mapInstanceRef.current.removeLayer(buildingsLayer);
-    }
-};
-    }, [showGoogleBuildings, selectedCountry]);
+            if (mapInstanceRef.current) {
+                buildingsLayer.addTo(mapInstanceRef.current);
+                console.log(`Google Buildings (${selectedCountry}) loaded successfully`);
+            }
+        } catch (error) {
+            console.error('Failed to load Google Buildings:', error);
+            alert(`Google Buildings failed to load for ${selectedCountry}. Try OSM Buildings.`);
+            setShowGoogleBuildings(false);
+            setShowOSMBuildings(true);
+        }
+    };
+
+    loadGoogleBuildings();
+
+    return () => {
+        if (buildingsLayer && mapInstanceRef.current) {
+            mapInstanceRef.current.removeLayer(buildingsLayer);
+        }
+    };
+}, [showGoogleBuildings, selectedCountry]);
 
 let url = '';
 if (mapStyle === 'street') {
