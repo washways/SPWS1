@@ -478,19 +478,22 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 // Initialize PMTiles instance
                 const p = new PMTiles(pmtilesUrl);
 
-                // Create vector grid layer
+                // Log metadata to see what's in the file
+                const metadata = await p.getMetadata();
+                console.log('PMTiles metadata:', metadata);
+
+                // Create vector grid layer with wildcard styling
                 buildingsLayer = (L as any).vectorGrid.protobuf(pmtilesUrl, {
-                    vectorTileLayerStyles: {
-                        '': function () {
-                            return {
-                                fill: true,
-                                fillColor: '#1CABE2',  // UNICEF Cyan
-                                fillOpacity: 0.4,
-                                stroke: true,
-                                color: '#003E5E',       // UNICEF Dark Blue
-                                weight: 1
-                            };
-                        }
+                    vectorTileLayerStyles: function (layerName: string) {
+                        console.log('Layer found:', layerName);
+                        return {
+                            fill: true,
+                            fillColor: '#1CABE2',  // UNICEF Cyan
+                            fillOpacity: 0.4,
+                            stroke: true,
+                            color: '#003E5E',       // UNICEF Dark Blue
+                            weight: 1
+                        };
                     },
                     maxNativeZoom: 15,
                     maxZoom: 22,
@@ -502,12 +505,11 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     try {
                         const result = await p.getZxy(coords.z, coords.x, coords.y);
                         if (result && result.data) {
+                            console.log(`Tile ${coords.z}/${coords.x}/${coords.y} size:`, result.data.byteLength);
                             return result.data; // ArrayBuffer
                         }
-                        // Return empty ArrayBuffer for missing tiles (no error spam)
                         return new ArrayBuffer(0);
                     } catch (error) {
-                        // Silently handle errors - return empty buffer
                         return new ArrayBuffer(0);
                     }
                 };
