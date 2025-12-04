@@ -387,13 +387,15 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         });
 
         // Auto-select country on move
-        const center = map.getCenter();
-        const newCountry = getCountryFromBounds(center.lat, center.lng);
+        map.on('moveend', () => {
+            const center = map.getCenter();
+            const newCountry = getCountryFromBounds(center.lat, center.lng);
 
-        if (newCountry !== selectedCountryRef.current) {
-            // Update state if country changes based on map center
-            setSelectedCountry(newCountry);
-        }
+            if (newCountry !== selectedCountryRef.current) {
+                // Update state if country changes based on map center
+                setSelectedCountry(newCountry);
+            }
+        });
     });
 
     return () => { };
