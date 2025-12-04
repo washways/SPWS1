@@ -472,22 +472,16 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
         const loadGoogleBuildings = async () => {
             try {
-                // Register PMTiles protocol
-                const protocol = new Protocol();
-                (L as any).PMTiles = PMTiles;
-                protocol.add(L);
-
-                // Use pmtiles:// protocol for vectorGrid
-                // The URL must be a template for vectorGrid, but with pmtiles protocol it handles the archive
                 const pmtilesUrl = `https://data.source.coop/vida/google-microsoft-open-buildings/pmtiles/by_country/country_iso=${selectedCountry}/${selectedCountry}.pmtiles`;
-                const layerUrl = `pmtiles://${pmtilesUrl}/{z}/{x}/{y}.pbf`;
-
                 console.log(`Loading Google Buildings for ${selectedCountry}: ${pmtilesUrl}`);
 
-                // Create vector grid layer with UNICEF styling
-                buildingsLayer = (L as any).vectorGrid.protobuf(layerUrl, {
+                // Initialize PMTiles instance
+                const p = new PMTiles(pmtilesUrl);
+
+                // Create vector grid layer
+                // We pass the URL but we'll override the fetcher
+                buildingsLayer = (L as any).vectorGrid.protobuf(pmtilesUrl, {
                     vectorTileLayerStyles: {
-                        // Use wildcard to match any layer name in the PMTiles
                         '': function () {
                             return {
                                 fill: true,
@@ -501,9 +495,23 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     },
                     maxNativeZoom: 15,
                     maxZoom: 22,
-                    interactive: false,
-                    rendererFactory: (L as any).canvas.tile
+                    interactive: false
                 });
+
+                // Override the tile fetcher to use PMTiles
+                // This bypasses the need for protocol registration and handles the archive correctly
+                buildingsLayer._getVectorTilePromise = async function (coords: any) {
+                    try {
+                        const result = await p.getZxy(coords.z, coords.x, coords.y);
+                        if (result) {
+                            return result.data; // ArrayBuffer
+                        }
+                    } catch (e) {
+                        // Tile missing or error, return null to skip
+                        return null;
+                    }
+                    return null;
+                };
 
                 if (mapInstanceRef.current) {
                     buildingsLayer.addTo(mapInstanceRef.current);
