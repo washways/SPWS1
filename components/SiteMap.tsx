@@ -496,7 +496,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                             weight: 1
                         }
                     },
-                    maxNativeZoom: 15,
+                    maxNativeZoom: 14,  // Match PMTiles metadata maxzoom
                     maxZoom: 22,
                     interactive: false
                 });
