@@ -482,18 +482,17 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 const metadata = await p.getMetadata();
                 console.log('PMTiles metadata:', metadata);
 
-                // Create vector grid layer with wildcard styling
+                // Create vector grid layer targeting the specific country layer
                 buildingsLayer = (L as any).vectorGrid.protobuf(pmtilesUrl, {
-                    vectorTileLayerStyles: function (layerName: string) {
-                        console.log('Layer found:', layerName);
-                        return {
+                    vectorTileLayerStyles: {
+                        [selectedCountry]: {
                             fill: true,
                             fillColor: '#1CABE2',  // UNICEF Cyan
                             fillOpacity: 0.4,
                             stroke: true,
                             color: '#003E5E',       // UNICEF Dark Blue
                             weight: 1
-                        };
+                        }
                     },
                     maxNativeZoom: 15,
                     maxZoom: 22,
