@@ -517,611 +517,601 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             }
         };
 
-        if (mapInstanceRef.current) {
-            buildingsLayer.addTo(mapInstanceRef.current);
-            console.log(`Google Buildings (${selectedCountry}) loaded successfully`);
-        }
-    } catch (error) {
-        console.error('Failed to load Google Buildings:', error);
-        alert(`Google Buildings failed to load for ${selectedCountry}. Try OSM Buildings.`);
-        setShowGoogleBuildings(false);
-        setShowOSMBuildings(true);
-    }
-};
 
-loadGoogleBuildings();
 
-return () => {
-    if (buildingsLayer && mapInstanceRef.current) {
-        mapInstanceRef.current.removeLayer(buildingsLayer);
-    }
-};
+        loadGoogleBuildings();
+
+        return () => {
+            if (buildingsLayer && mapInstanceRef.current) {
+                mapInstanceRef.current.removeLayer(buildingsLayer);
+            }
+        };
     }, [showGoogleBuildings, selectedCountry]);
 
-// Map Style Layer
-useEffect(() => {
-    if (!mapInstanceRef.current) return;
+    // Map Style Layer
+    useEffect(() => {
+        if (!mapInstanceRef.current) return;
 
-    let url = '';
-    if (mapStyle === 'street') {
-        url = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    } else if (mapStyle === 'satellite') {
-        url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-    } else if (mapStyle === 'topo') {
-        // OpenTopoMap for hydraulic planning
-        url = 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
-    }
-
-    // Update TileLayer with crossOrigin for PDF export compatibility
-    const tileLayer = L.tileLayer(url, {
-        attribution: mapStyle === 'topo' ? 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)' : 'Map data',
-        maxZoom: 22,
-        crossOrigin: true
-    }).addTo(mapInstanceRef.current);
-
-    return () => {
-        if (mapInstanceRef.current) {
-            mapInstanceRef.current.removeLayer(tileLayer);
+        let url = '';
+        if (mapStyle === 'street') {
+            url = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+        } else if (mapStyle === 'satellite') {
+            url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+        } else if (mapStyle === 'topo') {
+            // OpenTopoMap for hydraulic planning
+            url = 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
         }
-    };
-}, [mapStyle]);
 
-useEffect(() => { recalcAutoConnections(); }, [inputs, population]);
+        // Update TileLayer with crossOrigin for PDF export compatibility
+        const tileLayer = L.tileLayer(url, {
+            attribution: mapStyle === 'topo' ? 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)' : 'Map data',
+            maxZoom: 22,
+            crossOrigin: true
+        }).addTo(mapInstanceRef.current);
 
-const finishSegment = () => {
-    const seg = currentSegmentRef.current;
-    if (seg.length < 2) return;
-    const cleanSeg = seg.filter((p, i) => i === 0 || p.distanceTo(seg[i - 1]) > 0.1);
-
-    if (cleanSeg.length > 1) {
-        const id = Math.random().toString(36).substr(2, 9);
-        const poly = L.polyline(cleanSeg, { color: '#ef4444', weight: 4 }).addTo(mapInstanceRef.current!);
-        poly.on('click', (e) => {
-            if (activeToolRef.current === 'delete') {
-                L.DomEvent.stopPropagation(e);
-                poly.remove();
-                features.current.mainLines = features.current.mainLines.filter(ml => ml.id !== id);
-                recalcAutoConnections();
+        return () => {
+            if (mapInstanceRef.current) {
+                mapInstanceRef.current.removeLayer(tileLayer);
             }
-        });
-        features.current.mainLines.push({ poly, id });
-    }
+        };
+    }, [mapStyle]);
 
-    setCurrentSegment([]);
-    setIsDrawing(false);
-    if (features.current.tempLine) { features.current.tempLine.remove(); features.current.tempLine = null; }
-    recalcAutoConnections();
-};
+    useEffect(() => { recalcAutoConnections(); }, [inputs, population]);
 
-const recalcAutoConnections = () => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
+    const finishSegment = () => {
+        const seg = currentSegmentRef.current;
+        if (seg.length < 2) return;
+        const cleanSeg = seg.filter((p, i) => i === 0 || p.distanceTo(seg[i - 1]) > 0.1);
 
-    // Rising Main
-    if (features.current.borehole && features.current.tank) {
-        const bhLL = features.current.borehole.marker.getLatLng();
-        const tankLL = features.current.tank.marker.getLatLng();
-        if (features.current.risingMain) features.current.risingMain.remove();
-        features.current.risingMain = L.polyline([bhLL, tankLL], { color: '#3b82f6', weight: 5, opacity: 0.8 }).addTo(map);
-    } else {
-        if (features.current.risingMain) { features.current.risingMain.remove(); features.current.risingMain = null; }
-    }
-
-    // Distribution Lines
-    features.current.distLines.forEach(l => l.remove());
-    features.current.distLines = [];
-
-    const connectableFeatures = [...features.current.taps, ...features.current.institutions.filter(i => i.type !== 'grid')];
-
-    if (features.current.mainLines.length > 0 || features.current.tank) {
-        connectableFeatures.forEach(feature => {
-            const featLL = feature.marker.getLatLng();
-            let minDist = Infinity;
-            let connectPt: L.LatLng | null = null;
-
-            features.current.mainLines.forEach(ml => {
-                const pts = ml.poly.getLatLngs() as L.LatLng[];
-                const flatPts: L.LatLng[] = Array.isArray(pts[0]) ? (pts as any).flat() : pts;
-                if (flatPts.length > 0 && 'lat' in flatPts[0]) {
-                    for (let i = 0; i < flatPts.length - 1; i++) {
-                        const closest = getClosestPointOnSegment(featLL, flatPts[i], flatPts[i + 1]);
-                        const dist = featLL.distanceTo(closest);
-                        if (dist < minDist) { minDist = dist; connectPt = closest; }
-                    }
+        if (cleanSeg.length > 1) {
+            const id = Math.random().toString(36).substr(2, 9);
+            const poly = L.polyline(cleanSeg, { color: '#ef4444', weight: 4 }).addTo(mapInstanceRef.current!);
+            poly.on('click', (e) => {
+                if (activeToolRef.current === 'delete') {
+                    L.DomEvent.stopPropagation(e);
+                    poly.remove();
+                    features.current.mainLines = features.current.mainLines.filter(ml => ml.id !== id);
+                    recalcAutoConnections();
                 }
             });
+            features.current.mainLines.push({ poly, id });
+        }
 
-            if (features.current.tank) {
-                const tLoc = features.current.tank.marker.getLatLng();
-                const dist = featLL.distanceTo(tLoc);
-                if (dist < minDist) { minDist = dist; connectPt = tLoc; }
-            }
-
-            if (connectPt) {
-                const line = L.polyline([featLL, connectPt], { color: '#10b981', weight: 2, dashArray: '5, 5' }).addTo(map);
-                features.current.distLines.push(line);
-            }
-        });
-    }
-
-    performCalculations();
-};
-
-const calculateHeadLoss = (lengthM: number, flowRateM3H: number, diameterMM: number) => {
-    const Q = flowRateM3H / 3600; // m3/s
-    const D = diameterMM / 1000; // m
-    const C = 140; // HDPE Roughness
-    if (Q === 0 || D === 0) return 0;
-    return 10.67 * lengthM * Math.pow(Q, 1.852) * Math.pow(C, -1.852) * Math.pow(D, -4.87);
-};
-
-const generateProfiles = async (flowRateM3H: number): Promise<PipelineProfile[]> => {
-    const profiles: PipelineProfile[] = [];
-    // 1. Rising Main
-    if (features.current.borehole && features.current.tank && features.current.risingMain) {
-        const pts = features.current.risingMain.getLatLngs() as L.LatLng[];
-        const elevs = await fetchPathElevations(pts);
-        const dists: number[] = [];
-        let totalDist = 0;
-        pts.forEach((p, i) => {
-            if (i > 0) totalDist += p.distanceTo(pts[i - 1]);
-            dists.push(totalDist);
-        });
-        const totalHeadLoss = calculateHeadLoss(totalDist, flowRateM3H, 63);
-        const startHGL = (features.current.tank.elev || 0) + inputs.tankHeight + totalHeadLoss;
-        const data = pts.map((p, i) => {
-            const currentHGL = startHGL - ((dists[i] / totalDist) * totalHeadLoss);
-            const groundElev = (elevs[i] || 0);
-            return {
-                dist: dists[i],
-                elevation: groundElev,
-                hgl: currentHGL,
-                pressure: currentHGL - (groundElev - 1),
-                risk: (currentHGL - (groundElev - 1) < 0 ? 'negative_pressure' : (currentHGL - (groundElev - 1) > 100 ? 'high_pressure' : null)) as 'high_pressure' | 'negative_pressure' | null
-            };
-        });
-        profiles.push({ id: 'rising', name: 'Rising Main', data });
-    }
-    // 2. Main Lines
-    for (let i = 0; i < features.current.mainLines.length; i++) {
-        const ml = features.current.mainLines[i];
-        const pts = ml.poly.getLatLngs() as L.LatLng[];
-        const flatPts = (Array.isArray(pts[0]) && !('lat' in pts[0])) ? (pts as any).flat() : pts;
-        const elevs = await fetchPathElevations(flatPts);
-        const startHGL = (features.current.tank?.elev || 0) + inputs.tankHeight;
-        let cumDist = 0;
-        const data = flatPts.map((p: L.LatLng, idx: number) => {
-            if (idx > 0) cumDist += p.distanceTo(flatPts[idx - 1]);
-            const headLoss = calculateHeadLoss(cumDist, flowRateM3H, 63);
-            const currentHGL = startHGL - headLoss;
-            const groundElev = elevs[idx] || 0;
-            return {
-                dist: cumDist,
-                elevation: groundElev,
-                hgl: currentHGL,
-                pressure: currentHGL - (groundElev - 1),
-                risk: (currentHGL - (groundElev - 1) < 0 ? 'negative_pressure' : (currentHGL - (groundElev - 1) > 100 ? 'high_pressure' : null)) as 'high_pressure' | 'negative_pressure' | null
-            };
-        });
-        profiles.push({ id: ml.id, name: `Main Line ${i + 1}`, data });
-    }
-    return profiles;
-}
-
-const performCalculations = (generatedProfiles: PipelineProfile[] = []) => {
-    // Lengths
-    let rLen = 0;
-    if (features.current.risingMain) {
-        const pts = features.current.risingMain.getLatLngs() as L.LatLng[];
-        rLen = pts[0].distanceTo(pts[1]);
-    }
-
-    let mLen = 0;
-    features.current.mainLines.forEach(ml => {
-        const pts = ml.poly.getLatLngs() as L.LatLng[];
-        const flatPts = (Array.isArray(pts[0]) && !('lat' in pts[0])) ? (pts as any).flat() : pts;
-        for (let i = 0; i < flatPts.length - 1; i++) mLen += flatPts[i].distanceTo(flatPts[i + 1]);
-    });
-
-    let dLen = 0;
-    features.current.distLines.forEach(dl => {
-        const pts = dl.getLatLngs() as L.LatLng[];
-        dLen += pts[0].distanceTo(pts[1]);
-    });
-
-    const totalPipeLen = rLen + mLen + dLen;
-
-    // Institutional Counts & Demand
-    const countSchools = features.current.institutions.filter(i => i.type === 'school').length;
-    const countClinics = features.current.institutions.filter(i => i.type === 'clinic').length;
-    const countGardens = features.current.institutions.filter(i => i.type === 'garden').length;
-    const hasGrid = features.current.institutions.some(i => i.type === 'grid');
-
-    const domesticDemandM3 = (population * inputs.dailyDemandPerCapita) / 1000;
-    const institutionalDemandM3 = (
-        (countSchools * INSTITUTIONAL_DEMAND.SCHOOL) +
-        (countClinics * INSTITUTIONAL_DEMAND.CLINIC) +
-        (countGardens * INSTITUTIONAL_DEMAND.GARDEN)
-    ) / 1000;
-
-    const dailyDemandM3 = domesticDemandM3 + institutionalDemandM3;
-    const flowRateM3H = dailyDemandM3 / inputs.peakSunHours;
-
-    setCounts({
-        taps: features.current.taps.length,
-        risingLen: Math.round(rLen),
-        mainLen: Math.round(mLen),
-        distLen: Math.round(dLen),
-        hasBh: !!features.current.borehole,
-        hasTank: !!features.current.tank,
-        schools: countSchools,
-        clinics: countClinics,
-        gardens: countGardens,
-        hasGrid: hasGrid
-    });
-
-    // Extract Geometry
-    const geometry: SystemGeometry = {
-        center: mapInstanceRef.current ? mapInstanceRef.current.getCenter() : { lat: -13.2543, lng: 34.3015 },
-        zoom: mapInstanceRef.current ? mapInstanceRef.current.getZoom() : 7,
-        borehole: features.current.borehole ? features.current.borehole.marker.getLatLng() : null,
-        tank: features.current.tank ? features.current.tank.marker.getLatLng() : null,
-        taps: features.current.taps.map((t, i) => ({ ...t.marker.getLatLng(), id: t.id, label: `Tap ${i + 1}` })),
-        institutions: features.current.institutions.map((inst, i) => ({
-            ...inst.marker.getLatLng(),
-            id: inst.id,
-            label: inst.type.charAt(0).toUpperCase() + inst.type.slice(1),
-            type: inst.type
-        })),
-        lines: []
+        setCurrentSegment([]);
+        setIsDrawing(false);
+        if (features.current.tempLine) { features.current.tempLine.remove(); features.current.tempLine = null; }
+        recalcAutoConnections();
     };
 
-    if (features.current.risingMain) {
-        const pts = features.current.risingMain.getLatLngs() as L.LatLng[];
-        geometry.lines.push({
-            path: pts.map(p => ({ lat: p.lat, lng: p.lng })),
-            type: 'rising',
-            label: `Rising Main (${Math.round(rLen)}m)`
-        });
-    }
-    features.current.mainLines.forEach((ml, i) => {
-        const pts = ml.poly.getLatLngs() as L.LatLng[];
-        const flatPts = (Array.isArray(pts[0]) && !('lat' in pts[0])) ? (pts as any).flat() : pts;
-        let segLen = 0;
-        for (let k = 0; k < flatPts.length - 1; k++) segLen += flatPts[k].distanceTo(flatPts[k + 1]);
-        geometry.lines.push({
-            path: flatPts.map(p => ({ lat: p.lat, lng: p.lng })),
-            type: 'main',
-            label: `Main Line ${i + 1} (${Math.round(segLen)}m)`
-        });
-    });
-    features.current.distLines.forEach((dl) => {
-        const pts = dl.getLatLngs() as L.LatLng[];
-        geometry.lines.push({ path: pts.map(p => ({ lat: p.lat, lng: p.lng })), type: 'dist', label: 'Distribution' });
-    });
+    const recalcAutoConnections = () => {
+        const map = mapInstanceRef.current;
+        if (!map) return;
 
-    // Engineering
-    let staticHead = inputs.staticWaterLevel + inputs.tankHeight;
-    let elevDiff = inputs.elevationDifference;
-    if (features.current.borehole?.elev && features.current.tank?.elev) {
-        elevDiff = Math.max(0, features.current.tank.elev - features.current.borehole.elev);
-        staticHead = inputs.staticWaterLevel + elevDiff + inputs.tankHeight;
-    }
-    const frictionHead = totalPipeLen * inputs.frictionLossFactor;
-    const totalDynamicHead = staticHead + frictionHead;
-    const hydraulicPowerKW = (flowRateM3H * totalDynamicHead * 9.81) / (3600 * inputs.pumpEfficiency);
-    const pumpPowerKW = hydraulicPowerKW * 1.2;
-    const pvArrayKW = pumpPowerKW * 1.5;
+        // Rising Main
+        if (features.current.borehole && features.current.tank) {
+            const bhLL = features.current.borehole.marker.getLatLng();
+            const tankLL = features.current.tank.marker.getLatLng();
+            if (features.current.risingMain) features.current.risingMain.remove();
+            features.current.risingMain = L.polyline([bhLL, tankLL], { color: '#3b82f6', weight: 5, opacity: 0.8 }).addTo(map);
+        } else {
+            if (features.current.risingMain) { features.current.risingMain.remove(); features.current.risingMain = null; }
+        }
 
-    const specs: SystemSpecs = {
-        dailyDemandM3, domesticDemandM3, institutionalDemandM3, totalDynamicHead, flowRateM3H, pumpPowerKW, pvArrayKW, pipeDiameterMM: 63,
-        countSchools, countClinics, countGardens, hasGrid
-    };
+        // Distribution Lines
+        features.current.distLines.forEach(l => l.remove());
+        features.current.distLines = [];
 
-    // Generate BoQ
-    const boq: BoQItem[] = [];
-    // Civils
-    boq.push({ id: 'c1', category: 'Civils', item: 'Borehole Drilling & Construction', unit: 'm', qty: inputs.boreholeDepth, rate: DESIGN_COSTS.DRILLING_PER_M, amount: Math.round(inputs.boreholeDepth * DESIGN_COSTS.DRILLING_PER_M) });
-    boq.push({ id: 'c2', category: 'Civils', item: 'Borehole Siting & Mob/Demob', unit: 'LS', qty: 1, rate: DESIGN_COSTS.DRILLING_BASE, amount: Math.round(DESIGN_COSTS.DRILLING_BASE) });
-    boq.push({ id: 'c3', category: 'Civils', item: `Tank Stand (${inputs.tankHeight}m) & Base`, unit: 'Sum', qty: 1, rate: DESIGN_COSTS.TANK_STAND_6M, amount: Math.round(DESIGN_COSTS.TANK_STAND_6M) });
-    boq.push({ id: 'c4', category: 'Civils', item: 'Fencing & Site Works', unit: 'Sum', qty: 1, rate: DESIGN_COSTS.FENCE_CIVILS, amount: Math.round(DESIGN_COSTS.FENCE_CIVILS) });
-    boq.push({ id: 'c5', category: 'Civils', item: 'Tap Stand Construction', unit: 'No', qty: counts.taps, rate: DESIGN_COSTS.DISTRIBUTION_POINTS, amount: Math.round(counts.taps * DESIGN_COSTS.DISTRIBUTION_POINTS) });
+        const connectableFeatures = [...features.current.taps, ...features.current.institutions.filter(i => i.type !== 'grid')];
 
-    // Network
-    boq.push({ id: 'n1', category: 'Network', item: 'Trenching & Backfill', unit: 'm', qty: Math.round(totalPipeLen), rate: DESIGN_COSTS.TRENCHING_PER_M, amount: Math.round(totalPipeLen * DESIGN_COSTS.TRENCHING_PER_M) });
-    if (rLen > 0) boq.push({ id: 'n2', category: 'Network', item: 'Rising Main (HDPE 63mm)', unit: 'm', qty: Math.round(rLen), rate: DESIGN_COSTS.PIPE_HDPE_63MM, amount: Math.round(Math.round(rLen) * DESIGN_COSTS.PIPE_HDPE_63MM) });
-    if (mLen > 0) boq.push({ id: 'n3', category: 'Network', item: 'Main Line (HDPE 63mm)', unit: 'm', qty: Math.round(mLen), rate: DESIGN_COSTS.PIPE_HDPE_63MM, amount: Math.round(Math.round(mLen) * DESIGN_COSTS.PIPE_HDPE_63MM) });
-    if (dLen > 0) boq.push({ id: 'n4', category: 'Network', item: 'Distribution (HDPE 32mm)', unit: 'm', qty: Math.round(dLen), rate: DESIGN_COSTS.PIPE_HDPE_32MM, amount: Math.round(Math.round(dLen) * DESIGN_COSTS.PIPE_HDPE_32MM) });
+        if (features.current.mainLines.length > 0 || features.current.tank) {
+            connectableFeatures.forEach(feature => {
+                const featLL = feature.marker.getLatLng();
+                let minDist = Infinity;
+                let connectPt: L.LatLng | null = null;
 
-    // Institutional connections
-    const instCount = countSchools + countClinics + countGardens;
-    if (instCount > 0) {
-        boq.push({ id: 'n5', category: 'Network', item: 'Institution Connections (Fittings/Meter)', unit: 'No', qty: instCount, rate: DESIGN_COSTS.INSTITUTION_CONNECTION, amount: instCount * DESIGN_COSTS.INSTITUTION_CONNECTION });
-    }
-
-    // Mechanical
-    const tankCost = DESIGN_COSTS.TANK_STEEL_BASE + (dailyDemandM3 * DESIGN_COSTS.TANK_PER_M3);
-    boq.push({ id: 'm1', category: 'Mechanical', item: `Steel Tank (${Math.ceil(dailyDemandM3)}m3)`, unit: 'No', qty: 1, rate: Math.round(tankCost), amount: Math.round(tankCost) });
-    const pumpCost = DESIGN_COSTS.PUMP_BASE + (pumpPowerKW * DESIGN_COSTS.PUMP_PER_KW);
-    boq.push({ id: 'm2', category: 'Mechanical', item: `Submersible Pump (${pumpPowerKW.toFixed(1)}kW)`, unit: 'No', qty: 1, rate: Math.round(pumpCost), amount: Math.round(pumpCost) });
-
-    // Electrical
-    const pvCost = DESIGN_COSTS.PV_STRUCTURE_BASE + (pvArrayKW * DESIGN_COSTS.PV_PER_KW);
-    boq.push({ id: 'e1', category: 'Electrical', item: `Solar Array (${pvArrayKW.toFixed(2)}kWp) & Structure`, unit: 'kW', qty: Math.ceil(pvArrayKW), rate: DESIGN_COSTS.PV_PER_KW, amount: Math.round(pvCost) });
-    boq.push({ id: 'e2', category: 'Electrical', item: 'Solar Pump Inverter/Controller', unit: 'No', qty: 1, rate: 1500, amount: 1500 });
-    if (hasGrid) {
-        boq.push({ id: 'e3', category: 'Electrical', item: 'Mini-Grid Kiosk / Charging Station', unit: 'Sum', qty: 1, rate: 4500, amount: 4500 });
-    }
-
-    generateProfiles(flowRateM3H).then(profiles => {
-        onUpdateCalc(specs, boq, profiles, geometry);
-    });
-};
-
-const handleApply = () => {
-    performCalculations();
-    const civils = (inputs.boreholeDepth * DESIGN_COSTS.DRILLING_PER_M) + DESIGN_COSTS.DRILLING_BASE + DESIGN_COSTS.TANK_STAND_6M + DESIGN_COSTS.FENCE_CIVILS + (counts.taps * DESIGN_COSTS.DISTRIBUTION_POINTS) + ((counts.risingLen + counts.mainLen + counts.distLen) * DESIGN_COSTS.TRENCHING_PER_M);
-    const equip = 25000;
-    onApplyDesign(civils, equip, counts.risingLen + counts.mainLen + counts.distLen);
-};
-
-// Tool Button Component
-const ToolButton = ({ tool, icon: Icon, label }: { tool: ToolType, icon: any, label: string }) => (
-    <button
-        onClick={() => {
-            setActiveTool(tool);
-            setIsDrawing(false);
-            setCurrentSegment([]);
-            if (features.current.tempLine) { features.current.tempLine.remove(); features.current.tempLine = null; }
-        }}
-        className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all w-full md:w-auto min-w-[60px] ${activeTool === tool ? 'bg-blue-600 text-white shadow-md transform scale-105' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'}`}
-        title={label}
-    >
-        <Icon className="w-5 h-5 mb-1" />
-        <span className="text-[10px] font-medium whitespace-nowrap">{label}</span>
-    </button>
-);
-
-
-// Spatial Analysis Logic
-useEffect(() => {
-    if (!osmBuildingLayerRef.current || !mapInstanceRef.current) return;
-
-    // Initialize visual buffer layer if needed
-    if (!visualBufferLayerRef.current) {
-        visualBufferLayerRef.current = L.layerGroup().addTo(mapInstanceRef.current);
-    } else {
-        visualBufferLayerRef.current.clearLayers();
-    }
-
-    let servedCount = 0;
-    let unservedCount = 0;
-
-    // Collect all pipe geometries (EXCLUDING Rising Main as requested)
-    const pipes: L.Polyline[] = [
-        // ...(features.current.risingMain ? [features.current.risingMain] : []), // Excluded
-        ...features.current.mainLines.map(ml => ml.poly),
-        ...features.current.distLines
-    ];
-
-    // Helper: Distance from point P to segment AB in meters
-    const getDistToSegmentMeters = (p: L.LatLng, a: L.LatLng, b: L.LatLng) => {
-        const pLat = p.lat; const pLng = p.lng;
-        const aLat = a.lat; const aLng = a.lng;
-        const bLat = b.lat; const bLng = b.lng;
-
-        let t = ((pLat - aLat) * (bLat - aLat) + (pLng - aLng) * (bLng - aLng)) /
-            ((bLat - aLat) ** 2 + (bLng - aLng) ** 2);
-
-        t = Math.max(0, Math.min(1, t));
-
-        const closestLat = aLat + t * (bLat - aLat);
-        const closestLng = aLng + t * (bLng - aLng);
-        const closest = new L.LatLng(closestLat, closestLng);
-
-        return p.distanceTo(closest);
-    };
-
-    // Helper: Generate buffer polygon around a segment
-    const getBufferPolygon = (p1: L.LatLng, p2: L.LatLng, bufferMeters: number) => {
-        // Calculate offset vectors
-        const dx = p2.lng - p1.lng;
-        const dy = p2.lat - p1.lat;
-        const len = Math.sqrt(dx * dx + dy * dy);
-
-        if (len === 0) return null;
-
-        // Convert meters to approx degrees (rough approximation for visualization)
-        // 1 deg lat ~ 111km, 1 deg lng ~ 111km * cos(lat)
-        const metersPerDegLat = 111132.92;
-        const metersPerDegLng = 111132.92 * Math.cos(p1.lat * (Math.PI / 180));
-
-        const bufferDegLat = bufferMeters / metersPerDegLat;
-        const bufferDegLng = bufferMeters / metersPerDegLng;
-
-        // Perpendicular vector (-dy, dx) normalized
-        const ux = -dy / len;
-        const uy = dx / len;
-
-        // Offset points
-        const offX = ux * bufferDegLng;
-        const offY = uy * bufferDegLat;
-
-        return [
-            [p1.lat + offY, p1.lng + offX],
-            [p2.lat + offY, p2.lng + offX],
-            [p2.lat - offY, p2.lng - offX],
-            [p1.lat - offY, p1.lng - offX]
-        ];
-    };
-
-    if (pipes.length === 0) {
-        // No pipes, all unserved
-        osmBuildingLayerRef.current.eachLayer((layer: any) => {
-            if (layer.setStyle) layer.setStyle({ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.3, weight: 1 });
-            unservedCount++;
-        });
-    } else {
-        // Draw Visual Buffer (Polygons for segments + Circles for joints)
-        pipes.forEach(pipe => {
-            const latlngs = pipe.getLatLngs() as L.LatLng[];
-
-            // Draw circles at vertices (joints)
-            latlngs.forEach(ll => {
-                L.circle(ll, { radius: bufferDistance, color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
-            });
-
-            // Draw buffer polygons for segments
-            for (let i = 0; i < latlngs.length - 1; i++) {
-                const polyCoords = getBufferPolygon(latlngs[i], latlngs[i + 1], bufferDistance);
-                if (polyCoords) {
-                    L.polygon(polyCoords as any, { color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
-                }
-            }
-        });
-
-        osmBuildingLayerRef.current.eachLayer((layer: any) => {
-            if (layer.feature && layer.feature.geometry.type === 'Polygon') {
-                const bounds = layer.getBounds();
-                const center = bounds.getCenter();
-
-                let isServed = false;
-                for (const pipe of pipes) {
-                    const pipeLatLngs = pipe.getLatLngs() as L.LatLng[];
-                    for (let i = 0; i < pipeLatLngs.length - 1; i++) {
-                        const dist = getDistToSegmentMeters(center, pipeLatLngs[i], pipeLatLngs[i + 1]);
-                        if (dist <= bufferDistance) {
-                            isServed = true;
-                            break;
+                features.current.mainLines.forEach(ml => {
+                    const pts = ml.poly.getLatLngs() as L.LatLng[];
+                    const flatPts: L.LatLng[] = Array.isArray(pts[0]) ? (pts as any).flat() : pts;
+                    if (flatPts.length > 0 && 'lat' in flatPts[0]) {
+                        for (let i = 0; i < flatPts.length - 1; i++) {
+                            const closest = getClosestPointOnSegment(featLL, flatPts[i], flatPts[i + 1]);
+                            const dist = featLL.distanceTo(closest);
+                            if (dist < minDist) { minDist = dist; connectPt = closest; }
                         }
                     }
-                    if (isServed) break;
+                });
+
+                if (features.current.tank) {
+                    const tLoc = features.current.tank.marker.getLatLng();
+                    const dist = featLL.distanceTo(tLoc);
+                    if (dist < minDist) { minDist = dist; connectPt = tLoc; }
                 }
 
-                if (isServed) {
-                    layer.setStyle({ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.5, weight: 2 }); // Green, thicker
-                    servedCount++;
-                } else {
-                    layer.setStyle({ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.3, weight: 1 }); // Red
-                    unservedCount++;
+                if (connectPt) {
+                    const line = L.polyline([featLL, connectPt], { color: '#10b981', weight: 2, dashArray: '5, 5' }).addTo(map);
+                    features.current.distLines.push(line);
                 }
-            }
-        });
+            });
+        }
+
+        performCalculations();
+    };
+
+    const calculateHeadLoss = (lengthM: number, flowRateM3H: number, diameterMM: number) => {
+        const Q = flowRateM3H / 3600; // m3/s
+        const D = diameterMM / 1000; // m
+        const C = 140; // HDPE Roughness
+        if (Q === 0 || D === 0) return 0;
+        return 10.67 * lengthM * Math.pow(Q, 1.852) * Math.pow(C, -1.852) * Math.pow(D, -4.87);
+    };
+
+    const generateProfiles = async (flowRateM3H: number): Promise<PipelineProfile[]> => {
+        const profiles: PipelineProfile[] = [];
+        // 1. Rising Main
+        if (features.current.borehole && features.current.tank && features.current.risingMain) {
+            const pts = features.current.risingMain.getLatLngs() as L.LatLng[];
+            const elevs = await fetchPathElevations(pts);
+            const dists: number[] = [];
+            let totalDist = 0;
+            pts.forEach((p, i) => {
+                if (i > 0) totalDist += p.distanceTo(pts[i - 1]);
+                dists.push(totalDist);
+            });
+            const totalHeadLoss = calculateHeadLoss(totalDist, flowRateM3H, 63);
+            const startHGL = (features.current.tank.elev || 0) + inputs.tankHeight + totalHeadLoss;
+            const data = pts.map((p, i) => {
+                const currentHGL = startHGL - ((dists[i] / totalDist) * totalHeadLoss);
+                const groundElev = (elevs[i] || 0);
+                return {
+                    dist: dists[i],
+                    elevation: groundElev,
+                    hgl: currentHGL,
+                    pressure: currentHGL - (groundElev - 1),
+                    risk: (currentHGL - (groundElev - 1) < 0 ? 'negative_pressure' : (currentHGL - (groundElev - 1) > 100 ? 'high_pressure' : null)) as 'high_pressure' | 'negative_pressure' | null
+                };
+            });
+            profiles.push({ id: 'rising', name: 'Rising Main', data });
+        }
+        // 2. Main Lines
+        for (let i = 0; i < features.current.mainLines.length; i++) {
+            const ml = features.current.mainLines[i];
+            const pts = ml.poly.getLatLngs() as L.LatLng[];
+            const flatPts = (Array.isArray(pts[0]) && !('lat' in pts[0])) ? (pts as any).flat() : pts;
+            const elevs = await fetchPathElevations(flatPts);
+            const startHGL = (features.current.tank?.elev || 0) + inputs.tankHeight;
+            let cumDist = 0;
+            const data = flatPts.map((p: L.LatLng, idx: number) => {
+                if (idx > 0) cumDist += p.distanceTo(flatPts[idx - 1]);
+                const headLoss = calculateHeadLoss(cumDist, flowRateM3H, 63);
+                const currentHGL = startHGL - headLoss;
+                const groundElev = elevs[idx] || 0;
+                return {
+                    dist: cumDist,
+                    elevation: groundElev,
+                    hgl: currentHGL,
+                    pressure: currentHGL - (groundElev - 1),
+                    risk: (currentHGL - (groundElev - 1) < 0 ? 'negative_pressure' : (currentHGL - (groundElev - 1) > 100 ? 'high_pressure' : null)) as 'high_pressure' | 'negative_pressure' | null
+                };
+            });
+            profiles.push({ id: ml.id, name: `Main Line ${i + 1}`, data });
+        }
+        return profiles;
     }
 
-    setServedPop(servedCount * peoplePerBuilding);
-    setUnservedPop(unservedCount * peoplePerBuilding);
+    const performCalculations = (generatedProfiles: PipelineProfile[] = []) => {
+        // Lengths
+        let rLen = 0;
+        if (features.current.risingMain) {
+            const pts = features.current.risingMain.getLatLngs() as L.LatLng[];
+            rLen = pts[0].distanceTo(pts[1]);
+        }
 
-}, [bufferDistance, peoplePerBuilding, showOSMBuildings, buildingsLoading, counts]); // Recalc when pipes change
+        let mLen = 0;
+        features.current.mainLines.forEach(ml => {
+            const pts = ml.poly.getLatLngs() as L.LatLng[];
+            const flatPts = (Array.isArray(pts[0]) && !('lat' in pts[0])) ? (pts as any).flat() : pts;
+            for (let i = 0; i < flatPts.length - 1; i++) mLen += flatPts[i].distanceTo(flatPts[i + 1]);
+        });
 
-// Recalc when pipes change
+        let dLen = 0;
+        features.current.distLines.forEach(dl => {
+            const pts = dl.getLatLngs() as L.LatLng[];
+            dLen += pts[0].distanceTo(pts[1]);
+        });
 
-return (
-    <div className="flex flex-col md:flex-row gap-4 h-[calc(100vh-140px)] relative">
+        const totalPipeLen = rLen + mLen + dLen;
 
-        {/* 1. ENGINEERING PANEL */}
-        <div className="order-2 md:order-1 w-full md:w-80 flex flex-col gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-y-auto max-h-[40%] md:max-h-full">
-            <div className="mb-2">
-                <form onSubmit={handleSearch} className="relative mb-2">
-                    <input type="text" placeholder="Search Location..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1CABE2] outline-none shadow-sm" />
-                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-                </form>
-                <h3 className="font-bold text-[#003E5E] flex items-center gap-2 border-b border-gray-200 pb-2"><Settings className="w-4 h-4" /> Design Parameters</h3>
-            </div>
-            <div className="space-y-4 text-sm">
-                {/* Spatial Analysis Inputs */}
-                <div className="p-2 bg-blue-50 rounded border border-blue-100 mb-2">
-                    <h4 className="font-bold text-blue-800 text-xs mb-2">Service Coverage</h4>
-                    <div className="space-y-2">
-                        <div>
-                            <label className="block text-gray-600 text-xs font-bold mb-1" title="Distance from pipe to be considered served">Service Buffer (m)</label>
-                            <input
-                                type="number"
-                                value={bufferDistance}
-                                onChange={e => setBufferDistance(Math.max(0, parseFloat(e.target.value) || 0))}
-                                className="w-full p-1.5 border rounded text-xs"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-gray-600 text-xs font-bold mb-1" title="Average people per household/building">People per Building</label>
-                            <input
-                                type="number"
-                                value={peoplePerBuilding}
-                                onChange={e => setPeoplePerBuilding(Math.max(1, parseFloat(e.target.value) || 1))}
-                                className="w-full p-1.5 border rounded text-xs"
-                            />
-                        </div>
-                        <div className="flex justify-between text-xs pt-1 border-t border-blue-200 mt-1">
-                            <span className="text-green-700 font-bold">Served: {servedPop.toLocaleString()}</span>
-                            <span className="text-red-700 font-bold">Unserved: {unservedPop.toLocaleString()}</span>
+        // Institutional Counts & Demand
+        const countSchools = features.current.institutions.filter(i => i.type === 'school').length;
+        const countClinics = features.current.institutions.filter(i => i.type === 'clinic').length;
+        const countGardens = features.current.institutions.filter(i => i.type === 'garden').length;
+        const hasGrid = features.current.institutions.some(i => i.type === 'grid');
+
+        const domesticDemandM3 = (population * inputs.dailyDemandPerCapita) / 1000;
+        const institutionalDemandM3 = (
+            (countSchools * INSTITUTIONAL_DEMAND.SCHOOL) +
+            (countClinics * INSTITUTIONAL_DEMAND.CLINIC) +
+            (countGardens * INSTITUTIONAL_DEMAND.GARDEN)
+        ) / 1000;
+
+        const dailyDemandM3 = domesticDemandM3 + institutionalDemandM3;
+        const flowRateM3H = dailyDemandM3 / inputs.peakSunHours;
+
+        setCounts({
+            taps: features.current.taps.length,
+            risingLen: Math.round(rLen),
+            mainLen: Math.round(mLen),
+            distLen: Math.round(dLen),
+            hasBh: !!features.current.borehole,
+            hasTank: !!features.current.tank,
+            schools: countSchools,
+            clinics: countClinics,
+            gardens: countGardens,
+            hasGrid: hasGrid
+        });
+
+        // Extract Geometry
+        const geometry: SystemGeometry = {
+            center: mapInstanceRef.current ? mapInstanceRef.current.getCenter() : { lat: -13.2543, lng: 34.3015 },
+            zoom: mapInstanceRef.current ? mapInstanceRef.current.getZoom() : 7,
+            borehole: features.current.borehole ? features.current.borehole.marker.getLatLng() : null,
+            tank: features.current.tank ? features.current.tank.marker.getLatLng() : null,
+            taps: features.current.taps.map((t, i) => ({ ...t.marker.getLatLng(), id: t.id, label: `Tap ${i + 1}` })),
+            institutions: features.current.institutions.map((inst, i) => ({
+                ...inst.marker.getLatLng(),
+                id: inst.id,
+                label: inst.type.charAt(0).toUpperCase() + inst.type.slice(1),
+                type: inst.type
+            })),
+            lines: []
+        };
+
+        if (features.current.risingMain) {
+            const pts = features.current.risingMain.getLatLngs() as L.LatLng[];
+            geometry.lines.push({
+                path: pts.map(p => ({ lat: p.lat, lng: p.lng })),
+                type: 'rising',
+                label: `Rising Main (${Math.round(rLen)}m)`
+            });
+        }
+        features.current.mainLines.forEach((ml, i) => {
+            const pts = ml.poly.getLatLngs() as L.LatLng[];
+            const flatPts = (Array.isArray(pts[0]) && !('lat' in pts[0])) ? (pts as any).flat() : pts;
+            let segLen = 0;
+            for (let k = 0; k < flatPts.length - 1; k++) segLen += flatPts[k].distanceTo(flatPts[k + 1]);
+            geometry.lines.push({
+                path: flatPts.map(p => ({ lat: p.lat, lng: p.lng })),
+                type: 'main',
+                label: `Main Line ${i + 1} (${Math.round(segLen)}m)`
+            });
+        });
+        features.current.distLines.forEach((dl) => {
+            const pts = dl.getLatLngs() as L.LatLng[];
+            geometry.lines.push({ path: pts.map(p => ({ lat: p.lat, lng: p.lng })), type: 'dist', label: 'Distribution' });
+        });
+
+        // Engineering
+        let staticHead = inputs.staticWaterLevel + inputs.tankHeight;
+        let elevDiff = inputs.elevationDifference;
+        if (features.current.borehole?.elev && features.current.tank?.elev) {
+            elevDiff = Math.max(0, features.current.tank.elev - features.current.borehole.elev);
+            staticHead = inputs.staticWaterLevel + elevDiff + inputs.tankHeight;
+        }
+        const frictionHead = totalPipeLen * inputs.frictionLossFactor;
+        const totalDynamicHead = staticHead + frictionHead;
+        const hydraulicPowerKW = (flowRateM3H * totalDynamicHead * 9.81) / (3600 * inputs.pumpEfficiency);
+        const pumpPowerKW = hydraulicPowerKW * 1.2;
+        const pvArrayKW = pumpPowerKW * 1.5;
+
+        const specs: SystemSpecs = {
+            dailyDemandM3, domesticDemandM3, institutionalDemandM3, totalDynamicHead, flowRateM3H, pumpPowerKW, pvArrayKW, pipeDiameterMM: 63,
+            countSchools, countClinics, countGardens, hasGrid
+        };
+
+        // Generate BoQ
+        const boq: BoQItem[] = [];
+        // Civils
+        boq.push({ id: 'c1', category: 'Civils', item: 'Borehole Drilling & Construction', unit: 'm', qty: inputs.boreholeDepth, rate: DESIGN_COSTS.DRILLING_PER_M, amount: Math.round(inputs.boreholeDepth * DESIGN_COSTS.DRILLING_PER_M) });
+        boq.push({ id: 'c2', category: 'Civils', item: 'Borehole Siting & Mob/Demob', unit: 'LS', qty: 1, rate: DESIGN_COSTS.DRILLING_BASE, amount: Math.round(DESIGN_COSTS.DRILLING_BASE) });
+        boq.push({ id: 'c3', category: 'Civils', item: `Tank Stand (${inputs.tankHeight}m) & Base`, unit: 'Sum', qty: 1, rate: DESIGN_COSTS.TANK_STAND_6M, amount: Math.round(DESIGN_COSTS.TANK_STAND_6M) });
+        boq.push({ id: 'c4', category: 'Civils', item: 'Fencing & Site Works', unit: 'Sum', qty: 1, rate: DESIGN_COSTS.FENCE_CIVILS, amount: Math.round(DESIGN_COSTS.FENCE_CIVILS) });
+        boq.push({ id: 'c5', category: 'Civils', item: 'Tap Stand Construction', unit: 'No', qty: counts.taps, rate: DESIGN_COSTS.DISTRIBUTION_POINTS, amount: Math.round(counts.taps * DESIGN_COSTS.DISTRIBUTION_POINTS) });
+
+        // Network
+        boq.push({ id: 'n1', category: 'Network', item: 'Trenching & Backfill', unit: 'm', qty: Math.round(totalPipeLen), rate: DESIGN_COSTS.TRENCHING_PER_M, amount: Math.round(totalPipeLen * DESIGN_COSTS.TRENCHING_PER_M) });
+        if (rLen > 0) boq.push({ id: 'n2', category: 'Network', item: 'Rising Main (HDPE 63mm)', unit: 'm', qty: Math.round(rLen), rate: DESIGN_COSTS.PIPE_HDPE_63MM, amount: Math.round(Math.round(rLen) * DESIGN_COSTS.PIPE_HDPE_63MM) });
+        if (mLen > 0) boq.push({ id: 'n3', category: 'Network', item: 'Main Line (HDPE 63mm)', unit: 'm', qty: Math.round(mLen), rate: DESIGN_COSTS.PIPE_HDPE_63MM, amount: Math.round(Math.round(mLen) * DESIGN_COSTS.PIPE_HDPE_63MM) });
+        if (dLen > 0) boq.push({ id: 'n4', category: 'Network', item: 'Distribution (HDPE 32mm)', unit: 'm', qty: Math.round(dLen), rate: DESIGN_COSTS.PIPE_HDPE_32MM, amount: Math.round(Math.round(dLen) * DESIGN_COSTS.PIPE_HDPE_32MM) });
+
+        // Institutional connections
+        const instCount = countSchools + countClinics + countGardens;
+        if (instCount > 0) {
+            boq.push({ id: 'n5', category: 'Network', item: 'Institution Connections (Fittings/Meter)', unit: 'No', qty: instCount, rate: DESIGN_COSTS.INSTITUTION_CONNECTION, amount: instCount * DESIGN_COSTS.INSTITUTION_CONNECTION });
+        }
+
+        // Mechanical
+        const tankCost = DESIGN_COSTS.TANK_STEEL_BASE + (dailyDemandM3 * DESIGN_COSTS.TANK_PER_M3);
+        boq.push({ id: 'm1', category: 'Mechanical', item: `Steel Tank (${Math.ceil(dailyDemandM3)}m3)`, unit: 'No', qty: 1, rate: Math.round(tankCost), amount: Math.round(tankCost) });
+        const pumpCost = DESIGN_COSTS.PUMP_BASE + (pumpPowerKW * DESIGN_COSTS.PUMP_PER_KW);
+        boq.push({ id: 'm2', category: 'Mechanical', item: `Submersible Pump (${pumpPowerKW.toFixed(1)}kW)`, unit: 'No', qty: 1, rate: Math.round(pumpCost), amount: Math.round(pumpCost) });
+
+        // Electrical
+        const pvCost = DESIGN_COSTS.PV_STRUCTURE_BASE + (pvArrayKW * DESIGN_COSTS.PV_PER_KW);
+        boq.push({ id: 'e1', category: 'Electrical', item: `Solar Array (${pvArrayKW.toFixed(2)}kWp) & Structure`, unit: 'kW', qty: Math.ceil(pvArrayKW), rate: DESIGN_COSTS.PV_PER_KW, amount: Math.round(pvCost) });
+        boq.push({ id: 'e2', category: 'Electrical', item: 'Solar Pump Inverter/Controller', unit: 'No', qty: 1, rate: 1500, amount: 1500 });
+        if (hasGrid) {
+            boq.push({ id: 'e3', category: 'Electrical', item: 'Mini-Grid Kiosk / Charging Station', unit: 'Sum', qty: 1, rate: 4500, amount: 4500 });
+        }
+
+        generateProfiles(flowRateM3H).then(profiles => {
+            onUpdateCalc(specs, boq, profiles, geometry);
+        });
+    };
+
+    const handleApply = () => {
+        performCalculations();
+        const civils = (inputs.boreholeDepth * DESIGN_COSTS.DRILLING_PER_M) + DESIGN_COSTS.DRILLING_BASE + DESIGN_COSTS.TANK_STAND_6M + DESIGN_COSTS.FENCE_CIVILS + (counts.taps * DESIGN_COSTS.DISTRIBUTION_POINTS) + ((counts.risingLen + counts.mainLen + counts.distLen) * DESIGN_COSTS.TRENCHING_PER_M);
+        const equip = 25000;
+        onApplyDesign(civils, equip, counts.risingLen + counts.mainLen + counts.distLen);
+    };
+
+    // Tool Button Component
+    const ToolButton = ({ tool, icon: Icon, label }: { tool: ToolType, icon: any, label: string }) => (
+        <button
+            onClick={() => {
+                setActiveTool(tool);
+                setIsDrawing(false);
+                setCurrentSegment([]);
+                if (features.current.tempLine) { features.current.tempLine.remove(); features.current.tempLine = null; }
+            }}
+            className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all w-full md:w-auto min-w-[60px] ${activeTool === tool ? 'bg-blue-600 text-white shadow-md transform scale-105' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'}`}
+            title={label}
+        >
+            <Icon className="w-5 h-5 mb-1" />
+            <span className="text-[10px] font-medium whitespace-nowrap">{label}</span>
+        </button>
+    );
+
+
+    // Spatial Analysis Logic
+    useEffect(() => {
+        if (!osmBuildingLayerRef.current || !mapInstanceRef.current) return;
+
+        // Initialize visual buffer layer if needed
+        if (!visualBufferLayerRef.current) {
+            visualBufferLayerRef.current = L.layerGroup().addTo(mapInstanceRef.current);
+        } else {
+            visualBufferLayerRef.current.clearLayers();
+        }
+
+        let servedCount = 0;
+        let unservedCount = 0;
+
+        // Collect all pipe geometries (EXCLUDING Rising Main as requested)
+        const pipes: L.Polyline[] = [
+            // ...(features.current.risingMain ? [features.current.risingMain] : []), // Excluded
+            ...features.current.mainLines.map(ml => ml.poly),
+            ...features.current.distLines
+        ];
+
+        // Helper: Distance from point P to segment AB in meters
+        const getDistToSegmentMeters = (p: L.LatLng, a: L.LatLng, b: L.LatLng) => {
+            const pLat = p.lat; const pLng = p.lng;
+            const aLat = a.lat; const aLng = a.lng;
+            const bLat = b.lat; const bLng = b.lng;
+
+            let t = ((pLat - aLat) * (bLat - aLat) + (pLng - aLng) * (bLng - aLng)) /
+                ((bLat - aLat) ** 2 + (bLng - aLng) ** 2);
+
+            t = Math.max(0, Math.min(1, t));
+
+            const closestLat = aLat + t * (bLat - aLat);
+            const closestLng = aLng + t * (bLng - aLng);
+            const closest = new L.LatLng(closestLat, closestLng);
+
+            return p.distanceTo(closest);
+        };
+
+        // Helper: Generate buffer polygon around a segment
+        const getBufferPolygon = (p1: L.LatLng, p2: L.LatLng, bufferMeters: number) => {
+            // Calculate offset vectors
+            const dx = p2.lng - p1.lng;
+            const dy = p2.lat - p1.lat;
+            const len = Math.sqrt(dx * dx + dy * dy);
+
+            if (len === 0) return null;
+
+            // Convert meters to approx degrees (rough approximation for visualization)
+            // 1 deg lat ~ 111km, 1 deg lng ~ 111km * cos(lat)
+            const metersPerDegLat = 111132.92;
+            const metersPerDegLng = 111132.92 * Math.cos(p1.lat * (Math.PI / 180));
+
+            const bufferDegLat = bufferMeters / metersPerDegLat;
+            const bufferDegLng = bufferMeters / metersPerDegLng;
+
+            // Perpendicular vector (-dy, dx) normalized
+            const ux = -dy / len;
+            const uy = dx / len;
+
+            // Offset points
+            const offX = ux * bufferDegLng;
+            const offY = uy * bufferDegLat;
+
+            return [
+                [p1.lat + offY, p1.lng + offX],
+                [p2.lat + offY, p2.lng + offX],
+                [p2.lat - offY, p2.lng - offX],
+                [p1.lat - offY, p1.lng - offX]
+            ];
+        };
+
+        if (pipes.length === 0) {
+            // No pipes, all unserved
+            osmBuildingLayerRef.current.eachLayer((layer: any) => {
+                if (layer.setStyle) layer.setStyle({ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.3, weight: 1 });
+                unservedCount++;
+            });
+        } else {
+            // Draw Visual Buffer (Polygons for segments + Circles for joints)
+            pipes.forEach(pipe => {
+                const latlngs = pipe.getLatLngs() as L.LatLng[];
+
+                // Draw circles at vertices (joints)
+                latlngs.forEach(ll => {
+                    L.circle(ll, { radius: bufferDistance, color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
+                });
+
+                // Draw buffer polygons for segments
+                for (let i = 0; i < latlngs.length - 1; i++) {
+                    const polyCoords = getBufferPolygon(latlngs[i], latlngs[i + 1], bufferDistance);
+                    if (polyCoords) {
+                        L.polygon(polyCoords as any, { color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
+                    }
+                }
+            });
+
+            osmBuildingLayerRef.current.eachLayer((layer: any) => {
+                if (layer.feature && layer.feature.geometry.type === 'Polygon') {
+                    const bounds = layer.getBounds();
+                    const center = bounds.getCenter();
+
+                    let isServed = false;
+                    for (const pipe of pipes) {
+                        const pipeLatLngs = pipe.getLatLngs() as L.LatLng[];
+                        for (let i = 0; i < pipeLatLngs.length - 1; i++) {
+                            const dist = getDistToSegmentMeters(center, pipeLatLngs[i], pipeLatLngs[i + 1]);
+                            if (dist <= bufferDistance) {
+                                isServed = true;
+                                break;
+                            }
+                        }
+                        if (isServed) break;
+                    }
+
+                    if (isServed) {
+                        layer.setStyle({ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.5, weight: 2 }); // Green, thicker
+                        servedCount++;
+                    } else {
+                        layer.setStyle({ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.3, weight: 1 }); // Red
+                        unservedCount++;
+                    }
+                }
+            });
+        }
+
+        setServedPop(servedCount * peoplePerBuilding);
+        setUnservedPop(unservedCount * peoplePerBuilding);
+
+    }, [bufferDistance, peoplePerBuilding, showOSMBuildings, buildingsLoading, counts]); // Recalc when pipes change
+
+    // Recalc when pipes change
+
+    return (
+        <div className="flex flex-col md:flex-row gap-4 h-[calc(100vh-140px)] relative">
+
+            {/* 1. ENGINEERING PANEL */}
+            <div className="order-2 md:order-1 w-full md:w-80 flex flex-col gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-y-auto max-h-[40%] md:max-h-full">
+                <div className="mb-2">
+                    <form onSubmit={handleSearch} className="relative mb-2">
+                        <input type="text" placeholder="Search Location..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1CABE2] outline-none shadow-sm" />
+                        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                    </form>
+                    <h3 className="font-bold text-[#003E5E] flex items-center gap-2 border-b border-gray-200 pb-2"><Settings className="w-4 h-4" /> Design Parameters</h3>
+                </div>
+                <div className="space-y-4 text-sm">
+                    {/* Spatial Analysis Inputs */}
+                    <div className="p-2 bg-blue-50 rounded border border-blue-100 mb-2">
+                        <h4 className="font-bold text-blue-800 text-xs mb-2">Service Coverage</h4>
+                        <div className="space-y-2">
+                            <div>
+                                <label className="block text-gray-600 text-xs font-bold mb-1" title="Distance from pipe to be considered served">Service Buffer (m)</label>
+                                <input
+                                    type="number"
+                                    value={bufferDistance}
+                                    onChange={e => setBufferDistance(Math.max(0, parseFloat(e.target.value) || 0))}
+                                    className="w-full p-1.5 border rounded text-xs"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-gray-600 text-xs font-bold mb-1" title="Average people per household/building">People per Building</label>
+                                <input
+                                    type="number"
+                                    value={peoplePerBuilding}
+                                    onChange={e => setPeoplePerBuilding(Math.max(1, parseFloat(e.target.value) || 1))}
+                                    className="w-full p-1.5 border rounded text-xs"
+                                />
+                            </div>
+                            <div className="flex justify-between text-xs pt-1 border-t border-blue-200 mt-1">
+                                <span className="text-green-700 font-bold">Served: {servedPop.toLocaleString()}</span>
+                                <span className="text-red-700 font-bold">Unserved: {unservedPop.toLocaleString()}</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div>
-                    <label className="block text-gray-600 text-xs font-bold mb-1">Target Population</label>
-                    <div className="flex gap-2">
-                        <input type="number" value={population} onChange={e => setPopulation(parseFloat(e.target.value) || 0)} className="w-full p-2 border rounded" />
-                        <button
-                            onClick={() => setPopulation(servedPop)}
-                            className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold hover:bg-blue-200 transition"
-                            title={`Sync with Spatial Analysis (Currently Served: ${servedPop.toLocaleString()})`}
-                        >
-                            Sync
-                        </button>
+                    <div>
+                        <label className="block text-gray-600 text-xs font-bold mb-1">Target Population</label>
+                        <div className="flex gap-2">
+                            <input type="number" value={population} onChange={e => setPopulation(parseFloat(e.target.value) || 0)} className="w-full p-2 border rounded" />
+                            <button
+                                onClick={() => setPopulation(servedPop)}
+                                className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold hover:bg-blue-200 transition"
+                                title={`Sync with Spatial Analysis (Currently Served: ${servedPop.toLocaleString()})`}
+                            >
+                                Sync
+                            </button>
+                        </div>
+                        <div className="text-[10px] text-gray-500 mt-1 text-right">
+                            Spatial Estimate: <strong>{servedPop.toLocaleString()}</strong>
+                        </div>
                     </div>
-                    <div className="text-[10px] text-gray-500 mt-1 text-right">
-                        Spatial Estimate: <strong>{servedPop.toLocaleString()}</strong>
+                    <div><label className="block text-gray-600 text-xs font-bold mb-1">Borehole Depth (m)</label><input type="number" value={inputs.boreholeDepth} onChange={e => setInputs({ ...inputs, boreholeDepth: parseFloat(e.target.value) || 0 })} className="w-full p-2 border rounded" /></div>
+                    <div><label className="block text-gray-600 text-xs font-bold mb-1">Static Water Level (m)</label><input type="number" value={inputs.staticWaterLevel} onChange={e => setInputs({ ...inputs, staticWaterLevel: parseFloat(e.target.value) || 0 })} className="w-full p-2 border rounded" /></div>
+                    <div><label className="block text-gray-600 text-xs font-bold mb-1">Tank Stand Height (m)</label>
+                        <select value={inputs.tankHeight} onChange={e => setInputs({ ...inputs, tankHeight: parseFloat(e.target.value) })} className="w-full p-2 border rounded"><option value={3}>3m</option><option value={6}>6m</option><option value={9}>9m</option></select>
                     </div>
                 </div>
-                <div><label className="block text-gray-600 text-xs font-bold mb-1">Borehole Depth (m)</label><input type="number" value={inputs.boreholeDepth} onChange={e => setInputs({ ...inputs, boreholeDepth: parseFloat(e.target.value) || 0 })} className="w-full p-2 border rounded" /></div>
-                <div><label className="block text-gray-600 text-xs font-bold mb-1">Static Water Level (m)</label><input type="number" value={inputs.staticWaterLevel} onChange={e => setInputs({ ...inputs, staticWaterLevel: parseFloat(e.target.value) || 0 })} className="w-full p-2 border rounded" /></div>
-                <div><label className="block text-gray-600 text-xs font-bold mb-1">Tank Stand Height (m)</label>
-                    <select value={inputs.tankHeight} onChange={e => setInputs({ ...inputs, tankHeight: parseFloat(e.target.value) })} className="w-full p-2 border rounded"><option value={3}>3m</option><option value={6}>6m</option><option value={9}>9m</option></select>
+                <div className="mt-auto bg-slate-800 text-white p-4 rounded-lg text-xs space-y-2">
+                    <div className="flex justify-between"><span>Borehole:</span><span className={counts.hasBh ? "text-emerald-400 font-bold" : "text-gray-500"}>{counts.hasBh ? "Set" : "Missing"}</span></div>
+                    <div className="flex justify-between"><span>Tank:</span><span className={counts.hasTank ? "text-emerald-400 font-bold" : "text-gray-500"}>{counts.hasTank ? "Set" : "Missing"}</span></div>
+                    <div className="flex justify-between"><span>Taps:</span><span className="font-bold">{counts.taps}</span></div>
+                    <div className="flex justify-between"><span>Institutions:</span><span className="font-bold">{counts.schools + counts.clinics + counts.gardens}</span></div>
+                    <div className="flex justify-between border-t border-slate-600 pt-2"><span>Total Pipe:</span><span className="font-bold">{(counts.risingLen + counts.mainLen + counts.distLen).toLocaleString()} m</span></div>
+                </div>
+                <button onClick={handleApply} disabled={!counts.hasBh || !counts.hasTank} className="w-full py-3 bg-[#1CABE2] hover:bg-[#003E5E] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow transition flex items-center justify-center gap-2"><CheckCircle className="w-4 h-4" /> Apply Design</button>
+            </div>
+
+            {/* 2. MAP AREA */}
+            <div className="order-1 md:order-2 flex-1 relative min-h-[400px] md:h-full bg-gray-100 rounded-xl overflow-hidden shadow-inner border border-gray-300">
+                <div ref={mapContainerRef} className="w-full h-full z-0 min-h-[400px]" style={{ minHeight: '400px' }} />
+                {loadingElevation && <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow text-xs font-bold text-blue-600 flex items-center gap-2 z-[400]"><Activity className="w-3 h-3 animate-spin" /> Fetching Elevation...</div>}
+                {buildingsLoading && <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow text-xs font-bold text-green-600 flex items-center gap-2 z-[400]"><Activity className="w-3 h-3 animate-spin" /> Loading Buildings...</div>}
+                <div className="absolute top-4 right-4 bg-white rounded-lg shadow-md border border-gray-200 p-1 flex flex-col gap-1 z-[400]">
+                    <div className="flex gap-1">
+                        <button onClick={() => setShowOSMBuildings(!showOSMBuildings)} className={`p-1.5 rounded ${showOSMBuildings ? 'bg-[#1CABE2]/20 text-[#003E5E]' : 'hover:bg-gray-100 text-gray-700'}`} title="OSM Buildings (Development)"><Home className="w-4 h-4" /></button>
+                        <button onClick={() => setShowGoogleBuildings(!showGoogleBuildings)} className={`p-1.5 rounded ${showGoogleBuildings ? 'bg-[#1CABE2]/20 text-[#003E5E]' : 'hover:bg-gray-100 text-gray-700'}`} title="Google Buildings (Production Only)"><Box className="w-4 h-4" /></button>
+                    </div>
+                    <div className="w-full h-px bg-gray-300"></div>
+                    <div className="flex gap-1">
+                        <button onClick={() => setMapStyle('street')} className={`p-1.5 rounded ${mapStyle === 'street' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Street View"><MapIcon className="w-4 h-4 text-gray-700" /></button>
+                        <button onClick={() => setMapStyle('satellite')} className={`p-1.5 rounded ${mapStyle === 'satellite' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Satellite View"><Layers className="w-4 h-4 text-gray-700" /></button>
+                        <button onClick={() => setMapStyle('topo')} className={`p-1.5 rounded ${mapStyle === 'topo' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Terrain/Topography"><Mountain className="w-4 h-4 text-gray-700" /></button>
+                    </div>
+                </div>
+                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-white/95 backdrop-blur shadow-xl border border-gray-200 rounded-2xl p-2 flex gap-2 z-[400] max-w-[95%] overflow-x-auto">
+                    <ToolButton tool="select" icon={MousePointerClick} label="Select" />
+                    <div className="w-px bg-gray-300 mx-1"></div>
+                    <ToolButton tool="borehole" icon={Disc} label="Borehole" />
+                    <ToolButton tool="tank" icon={Box} label="Tank" />
+                    <ToolButton tool="pipeMain" icon={Spline} label="Pipe" />
+                    <ToolButton tool="tap" icon={CircleDot} label="Tap" />
+                    <div className="w-px bg-gray-300 mx-1"></div>
+                    <ToolButton tool="school" icon={GraduationCap} label="School" />
+                    <ToolButton tool="clinic" icon={Stethoscope} label="Clinic" />
+                    <ToolButton tool="garden" icon={Sprout} label="Garden" />
+                    <ToolButton tool="grid" icon={Zap} label="Grid" />
+                    <div className="w-px bg-gray-300 mx-1"></div>
+                    <ToolButton tool="delete" icon={Eraser} label="Delete" />
                 </div>
             </div>
-            <div className="mt-auto bg-slate-800 text-white p-4 rounded-lg text-xs space-y-2">
-                <div className="flex justify-between"><span>Borehole:</span><span className={counts.hasBh ? "text-emerald-400 font-bold" : "text-gray-500"}>{counts.hasBh ? "Set" : "Missing"}</span></div>
-                <div className="flex justify-between"><span>Tank:</span><span className={counts.hasTank ? "text-emerald-400 font-bold" : "text-gray-500"}>{counts.hasTank ? "Set" : "Missing"}</span></div>
-                <div className="flex justify-between"><span>Taps:</span><span className="font-bold">{counts.taps}</span></div>
-                <div className="flex justify-between"><span>Institutions:</span><span className="font-bold">{counts.schools + counts.clinics + counts.gardens}</span></div>
-                <div className="flex justify-between border-t border-slate-600 pt-2"><span>Total Pipe:</span><span className="font-bold">{(counts.risingLen + counts.mainLen + counts.distLen).toLocaleString()} m</span></div>
-            </div>
-            <button onClick={handleApply} disabled={!counts.hasBh || !counts.hasTank} className="w-full py-3 bg-[#1CABE2] hover:bg-[#003E5E] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow transition flex items-center justify-center gap-2"><CheckCircle className="w-4 h-4" /> Apply Design</button>
         </div>
-
-        {/* 2. MAP AREA */}
-        <div className="order-1 md:order-2 flex-1 relative min-h-[400px] md:h-full bg-gray-100 rounded-xl overflow-hidden shadow-inner border border-gray-300">
-            <div ref={mapContainerRef} className="w-full h-full z-0 min-h-[400px]" style={{ minHeight: '400px' }} />
-            {loadingElevation && <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow text-xs font-bold text-blue-600 flex items-center gap-2 z-[400]"><Activity className="w-3 h-3 animate-spin" /> Fetching Elevation...</div>}
-            {buildingsLoading && <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow text-xs font-bold text-green-600 flex items-center gap-2 z-[400]"><Activity className="w-3 h-3 animate-spin" /> Loading Buildings...</div>}
-            <div className="absolute top-4 right-4 bg-white rounded-lg shadow-md border border-gray-200 p-1 flex flex-col gap-1 z-[400]">
-                <div className="flex gap-1">
-                    <button onClick={() => setShowOSMBuildings(!showOSMBuildings)} className={`p-1.5 rounded ${showOSMBuildings ? 'bg-[#1CABE2]/20 text-[#003E5E]' : 'hover:bg-gray-100 text-gray-700'}`} title="OSM Buildings (Development)"><Home className="w-4 h-4" /></button>
-                    <button onClick={() => setShowGoogleBuildings(!showGoogleBuildings)} className={`p-1.5 rounded ${showGoogleBuildings ? 'bg-[#1CABE2]/20 text-[#003E5E]' : 'hover:bg-gray-100 text-gray-700'}`} title="Google Buildings (Production Only)"><Box className="w-4 h-4" /></button>
-                </div>
-                <div className="w-full h-px bg-gray-300"></div>
-                <div className="flex gap-1">
-                    <button onClick={() => setMapStyle('street')} className={`p-1.5 rounded ${mapStyle === 'street' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Street View"><MapIcon className="w-4 h-4 text-gray-700" /></button>
-                    <button onClick={() => setMapStyle('satellite')} className={`p-1.5 rounded ${mapStyle === 'satellite' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Satellite View"><Layers className="w-4 h-4 text-gray-700" /></button>
-                    <button onClick={() => setMapStyle('topo')} className={`p-1.5 rounded ${mapStyle === 'topo' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Terrain/Topography"><Mountain className="w-4 h-4 text-gray-700" /></button>
-                </div>
-            </div>
-            <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-white/95 backdrop-blur shadow-xl border border-gray-200 rounded-2xl p-2 flex gap-2 z-[400] max-w-[95%] overflow-x-auto">
-                <ToolButton tool="select" icon={MousePointerClick} label="Select" />
-                <div className="w-px bg-gray-300 mx-1"></div>
-                <ToolButton tool="borehole" icon={Disc} label="Borehole" />
-                <ToolButton tool="tank" icon={Box} label="Tank" />
-                <ToolButton tool="pipeMain" icon={Spline} label="Pipe" />
-                <ToolButton tool="tap" icon={CircleDot} label="Tap" />
-                <div className="w-px bg-gray-300 mx-1"></div>
-                <ToolButton tool="school" icon={GraduationCap} label="School" />
-                <ToolButton tool="clinic" icon={Stethoscope} label="Clinic" />
-                <ToolButton tool="garden" icon={Sprout} label="Garden" />
-                <ToolButton tool="grid" icon={Zap} label="Grid" />
-                <div className="w-px bg-gray-300 mx-1"></div>
-                <ToolButton tool="delete" icon={Eraser} label="Delete" />
-            </div>
-        </div>
-    </div>
-);
+    );
 };
