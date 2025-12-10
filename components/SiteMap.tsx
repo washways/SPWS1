@@ -231,19 +231,6 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     };
 
     useEffect(() => {
-        if (!mapContainerRef.current || mapInstanceRef.current) return;
-
-        // Use preferCanvas: true for better PDF rendering
-        // Changed initial view to Malawi Country Level (Zoom 7)
-        const map = L.map(mapContainerRef.current, {
-            zoomControl: false,
-            doubleClickZoom: false,
-            preferCanvas: false // Explicitly disable canvas to fix clearRect error
-        }).setView([-13.25, 34.3], 7);
-
-        mapInstanceRef.current = map;
-        L.control.zoom({ position: 'topright' }).addTo(map);
-        L.control.scale({ position: 'bottomleft', metric: true, imperial: false }).addTo(map);
 
         // Initial layer based on state (street)
         const url = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
