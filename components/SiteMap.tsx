@@ -213,7 +213,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             }
             return null;
         } catch (e) {
-            console.error("Reverse geocoding failed", e);
+            // console.error("Reverse geocoding failed", e); // Suppress error to avoid console noise
             return null;
         }
     };
@@ -647,6 +647,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         setIsDrawing(false);
         if (features.current.tempLine) { features.current.tempLine.remove(); features.current.tempLine = null; }
         recalcAutoConnections();
+        setAnalysisUpdateTrigger(prev => prev + 1); // Force analysis update after pipe finish
     };
 
     const recalcAutoConnections = () => {
@@ -948,6 +949,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             visualBufferLayerRef.current = L.layerGroup().addTo(mapInstanceRef.current);
         } else {
             visualBufferLayerRef.current.clearLayers();
+            if (!mapInstanceRef.current.hasLayer(visualBufferLayerRef.current)) {
+                visualBufferLayerRef.current.addTo(mapInstanceRef.current);
+            }
         }
 
         let servedCount = 0;
@@ -1025,8 +1029,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             });
         } else {
             // Draw Visual Buffer for Point Features
+            console.log(`Drawing buffers for ${pointFeatures.length} points and ${pipes.length} pipes. Radius: ${bufferDistance}m`);
             pointFeatures.forEach(pt => {
-                L.circle(pt, { radius: bufferDistance, color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
+                L.circle(pt, { radius: bufferDistance, color: '#22c55e', weight: 1, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
             });
 
             // Draw Visual Buffer (Polygons for segments + Circles for joints)
