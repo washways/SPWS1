@@ -929,6 +929,12 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             ...features.current.distLines
         ];
 
+        // Collect all point features (Taps, Schools, Clinics, Gardens)
+        const pointFeatures: L.LatLng[] = [
+            ...features.current.taps.map(t => t.marker.getLatLng()),
+            ...features.current.institutions.map(i => i.marker.getLatLng())
+        ];
+
         // Helper: Distance from point P to segment AB in meters
         const getDistToSegmentMeters = (p: L.LatLng, a: L.LatLng, b: L.LatLng) => {
             const pLat = p.lat; const pLng = p.lng;
@@ -980,13 +986,18 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             ];
         };
 
-        if (pipes.length === 0) {
-            // No pipes, all unserved
+        if (pipes.length === 0 && pointFeatures.length === 0) {
+            // No pipes or points, all unserved
             osmBuildingLayerRef.current.eachLayer((layer: any) => {
                 if (layer.setStyle) layer.setStyle({ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.3, weight: 1 });
                 unservedCount++;
             });
         } else {
+            // Draw Visual Buffer for Point Features
+            pointFeatures.forEach(pt => {
+                L.circle(pt, { radius: bufferDistance, color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
+            });
+
             // Draw Visual Buffer (Polygons for segments + Circles for joints)
             pipes.forEach(pipe => {
                 const latlngs = pipe.getLatLngs() as L.LatLng[];
@@ -1011,6 +1022,8 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     const center = bounds.getCenter();
 
                     let isServed = false;
+
+                    // Check distance to pipes
                     for (const pipe of pipes) {
                         const pipeLatLngs = pipe.getLatLngs() as L.LatLng[];
                         for (let i = 0; i < pipeLatLngs.length - 1; i++) {
@@ -1021,6 +1034,16 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                             }
                         }
                         if (isServed) break;
+                    }
+
+                    // Check distance to point features (if not already served)
+                    if (!isServed) {
+                        for (const pt of pointFeatures) {
+                            if (center.distanceTo(pt) <= bufferDistance) {
+                                isServed = true;
+                                break;
+                            }
+                        }
                     }
 
                     if (isServed) {
