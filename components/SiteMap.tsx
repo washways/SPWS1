@@ -18,7 +18,7 @@ interface SiteMapProps {
 }
 
 type ToolType = 'select' | 'borehole' | 'tank' | 'tap' | 'pipeMain' | 'delete' | 'school' | 'clinic' | 'garden' | 'grid';
-type MapStyle = 'street' | 'satellite' | 'topo';
+type MapStyle = 'street' | 'satellite' | 'topo' | 'hybrid';
 
 // --- Helper: Country from Bounds ---
 function getCountryFromBounds(lat: number, lng: number): string {
@@ -546,9 +546,12 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 alert(`Google Buildings failed to load for ${selectedCountry}. Please check your internet connection or try OSM Buildings.`);
                 setShowGoogleBuildings(false);
                 setShowOSMBuildings(true);
+            } finally {
+                setBuildingsLoading(false);
             }
         };
 
+        setBuildingsLoading(true);
         loadGoogleBuildings();
 
         return () => {
@@ -568,6 +571,8 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     useEffect(() => {
         if (!mapInstanceRef.current) return;
         let url = '';
+        let labelsUrl = '';
+
         if (mapStyle === 'street') {
             url = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
         } else if (mapStyle === 'satellite') {
@@ -575,6 +580,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         } else if (mapStyle === 'topo') {
             // OpenTopoMap for hydraulic planning
             url = 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
+        } else if (mapStyle === 'hybrid') {
+            url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+            labelsUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
         }
 
         // Update TileLayer with crossOrigin for PDF export compatibility
@@ -584,9 +592,19 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             crossOrigin: true
         }).addTo(mapInstanceRef.current);
 
+        let labelsLayer: L.TileLayer | null = null;
+        if (labelsUrl) {
+            labelsLayer = L.tileLayer(labelsUrl, {
+                maxZoom: 22,
+                crossOrigin: true,
+                zIndex: 1000 // Ensure labels are on top
+            }).addTo(mapInstanceRef.current);
+        }
+
         return () => {
             if (mapInstanceRef.current) {
                 mapInstanceRef.current.removeLayer(tileLayer);
+                if (labelsLayer) mapInstanceRef.current.removeLayer(labelsLayer);
             }
         };
     }, [mapStyle]);
@@ -1151,6 +1169,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     <div className="flex gap-1">
                         <button onClick={() => setMapStyle('street')} className={`p-1.5 rounded ${mapStyle === 'street' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Street View"><MapIcon className="w-4 h-4 text-gray-700" /></button>
                         <button onClick={() => setMapStyle('satellite')} className={`p-1.5 rounded ${mapStyle === 'satellite' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Satellite View"><Layers className="w-4 h-4 text-gray-700" /></button>
+                        <button onClick={() => setMapStyle('hybrid')} className={`p-1.5 rounded ${mapStyle === 'hybrid' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Hybrid View"><Layers className="w-4 h-4 text-blue-600" /></button>
                         <button onClick={() => setMapStyle('topo')} className={`p-1.5 rounded ${mapStyle === 'topo' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Terrain/Topography"><Mountain className="w-4 h-4 text-gray-700" /></button>
                     </div>
                 </div>
