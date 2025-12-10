@@ -105,18 +105,6 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     const [counts, setCounts] = useState({ taps: 0, mainLen: 0, risingLen: 0, distLen: 0, hasBh: false, hasTank: false, schools: 0, clinics: 0, gardens: 0, hasGrid: false });
 
     // Search State
-    const [searchQuery, setSearchQuery] = useState("");
-    const [searching, setSearching] = useState(false);
-
-    // Building Footprints State
-    const [showOSMBuildings, setShowOSMBuildings] = useState(false);
-    const [showGoogleBuildings, setShowGoogleBuildings] = useState(false);
-    const [selectedCountry, setSelectedCountry] = useState('MWI'); // Default to Malawi
-    const [buildingsLoading, setBuildingsLoading] = useState(false);
-
-    // Spatial Analysis State
-    const [bufferDistance, setBufferDistance] = useState(50); // meters
-    const [peoplePerBuilding, setPeoplePerBuilding] = useState(5);
     const [servedPop, setServedPop] = useState(0);
     const [unservedPop, setUnservedPop] = useState(0);
     const osmBuildingLayerRef = useRef<L.LayerGroup | null>(null);
@@ -527,6 +515,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                             if (count === 0) {
                                 console.log("No buildings found in this area (or FGB load failed silently).");
                             }
+                            setAnalysisUpdateTrigger(prev => prev + 1); // Force analysis update
                         } catch (e) {
                             console.error('Error fetching FGB features:', e);
                             // Do not alert constantly on move
@@ -597,14 +586,19 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
         let labelsLayer: L.TileLayer | null = null;
         if (labelsUrl) {
+            // Create a custom pane for labels if it doesn't exist
+            if (!mapInstanceRef.current.getPane('labels')) {
+                mapInstanceRef.current.createPane('labels');
+                mapInstanceRef.current.getPane('labels')!.style.zIndex = '600';
+                mapInstanceRef.current.getPane('labels')!.style.pointerEvents = 'none'; // Allow clicks to pass through
+            }
+
             labelsLayer = L.tileLayer(labelsUrl, {
                 maxZoom: 22,
                 crossOrigin: true,
-                zIndex: 1000, // Ensure labels are on top
+                pane: 'labels', // Use custom pane
                 opacity: 1
             }).addTo(mapInstanceRef.current);
-            // Force bring to front
-            labelsLayer.bringToFront();
         }
 
         return () => {
@@ -1046,6 +1040,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             const activeBuildingLayer = showGoogleBuildings && googleBuildingLayerRef.current ? googleBuildingLayerRef.current : osmBuildingLayerRef.current;
 
             if (activeBuildingLayer) {
+                console.log("Running service analysis on layer:", showGoogleBuildings ? "Google" : "OSM");
                 activeBuildingLayer.eachLayer((layer: any) => {
                     // Google Buildings (FGB) features might be different structure than OSM
                     // OSM: layer.feature.geometry.type === 'Polygon'
@@ -1095,7 +1090,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         setServedPop(servedCount * peoplePerBuilding);
         setUnservedPop(unservedCount * peoplePerBuilding);
 
-    }, [bufferDistance, peoplePerBuilding, showOSMBuildings, showGoogleBuildings, buildingsLoading, counts]); // Recalc when pipes change
+    }, [bufferDistance, peoplePerBuilding, showOSMBuildings, showGoogleBuildings, buildingsLoading, counts, analysisUpdateTrigger]); // Recalc when pipes change
 
     // Recalc when pipes change
 
