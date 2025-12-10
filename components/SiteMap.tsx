@@ -225,6 +225,8 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
         setSearching(true);
         try {
+            // Use a simple fetch without custom headers to avoid preflight CORS issues
+            // If this still fails, we might need a proxy or a different service.
             const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`);
             const data = await res.json();
             if (data && data.length > 0) {
@@ -248,7 +250,8 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         // Changed initial view to Malawi Country Level (Zoom 7)
         const map = L.map(mapContainerRef.current, {
             zoomControl: false,
-            doubleClickZoom: false
+            doubleClickZoom: false,
+            preferCanvas: false // Explicitly disable canvas to fix clearRect error
         }).setView([-13.25, 34.3], 7);
 
         mapInstanceRef.current = map;
