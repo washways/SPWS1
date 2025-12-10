@@ -119,6 +119,10 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     const [buildingsLoading, setBuildingsLoading] = useState(false);
     const [analysisUpdateTrigger, setAnalysisUpdateTrigger] = useState(0); // Force re-run of analysis
 
+    // Spatial Analysis State
+    const [bufferDistance, setBufferDistance] = useState(50); // meters
+    const [peoplePerBuilding, setPeoplePerBuilding] = useState(5);
+
     const osmBuildingLayerRef = useRef<L.LayerGroup | null>(null);
     const visualBufferLayerRef = useRef<L.LayerGroup | null>(null);
     const googleBuildingLayerRef = useRef<L.LayerGroup | null>(null);
