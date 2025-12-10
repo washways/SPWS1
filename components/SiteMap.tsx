@@ -248,7 +248,8 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             zoom: 7,
             zoomControl: false,
             preferCanvas: false,
-            renderer: svgRenderer.current
+            renderer: svgRenderer.current,
+            doubleClickZoom: false // Disable double-click zoom to allow pipe completion
         });
 
         mapInstanceRef.current = map;
@@ -385,10 +386,10 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
         map.on('dblclick', (e) => {
             if (activeToolRef.current === 'pipeMain' && currentSegmentRef.current.length > 0) {
-                L.DomEvent.stopPropagation(e);
-                L.DomEvent.preventDefault(e.originalEvent);
+                L.DomEvent.stop(e);
                 console.log('Double-click detected, finishing pipe segment');
                 finishSegment();
+                return false;
             }
         });
 
@@ -593,8 +594,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             // OpenTopoMap for hydraulic planning
             url = 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
         } else if (mapStyle === 'hybrid') {
-            url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-            labelsUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
+            // Use Mapbox satellite imagery with OSM labels overlay
+            url = 'https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.jpg?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw';
+            labelsUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
         }
 
         // Update TileLayer with crossOrigin for PDF export compatibility
@@ -1089,26 +1091,11 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
                         let isServed = false;
 
-                        // Check distance to pipes
-                        for (const pipe of pipes) {
-                            const pipeLatLngs = pipe.getLatLngs() as L.LatLng[];
-                            for (let i = 0; i < pipeLatLngs.length - 1; i++) {
-                                const dist = getDistToSegmentMeters(center, pipeLatLngs[i], pipeLatLngs[i + 1]);
-                                if (dist <= bufferDistance) {
-                                    isServed = true;
-                                    break;
-                                }
-                            }
-                            if (isServed) break;
-                        }
-
-                        // Check distance to point features (if not already served)
-                        if (!isServed) {
-                            for (const pt of pointFeatures) {
-                                if (center.distanceTo(pt) <= bufferDistance) {
-                                    isServed = true;
-                                    break;
-                                }
+                        // Check distance to point features ONLY (pipes convey water but don't distribute it)
+                        for (const pt of pointFeatures) {
+                            if (center.distanceTo(pt) <= bufferDistance) {
+                                isServed = true;
+                                break;
                             }
                         }
 
