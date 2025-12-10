@@ -271,7 +271,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             if (tool === 'borehole') {
                 if (features.current.borehole?.marker) features.current.borehole.marker.remove();
                 const m = L.marker(latlng, { icon: icons.current.bh, draggable: true }).addTo(map);
-                m.on('click', () => { if (activeToolRef.current === 'delete') { m.remove(); features.current.borehole = null; setInputs(prev => ({ ...prev, boreholeElevation: undefined })); recalcAutoConnections(); } });
+                m.on('click', () => { if (activeToolRef.current === 'delete') { m.remove(); features.current.borehole = null; setInputs(prev => ({ ...prev, boreholeElevation: undefined })); recalcAutoConnections(); setAnalysisUpdateTrigger(prev => prev + 1); } });
 
                 // Helper for handling placement and reverse geocoding
                 const handleBoreholeUpdate = async (lat: number, lng: number) => {
@@ -304,7 +304,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             else if (tool === 'tank') {
                 if (features.current.tank?.marker) features.current.tank.marker.remove();
                 const m = L.marker(latlng, { icon: icons.current.tank, draggable: true }).addTo(map);
-                m.on('click', () => { if (activeToolRef.current === 'delete') { m.remove(); features.current.tank = null; setInputs(prev => ({ ...prev, tankElevation: undefined })); recalcAutoConnections(); } });
+                m.on('click', () => { if (activeToolRef.current === 'delete') { m.remove(); features.current.tank = null; setInputs(prev => ({ ...prev, tankElevation: undefined })); recalcAutoConnections(); setAnalysisUpdateTrigger(prev => prev + 1); } });
                 m.on('dragend', async () => {
                     const ll = m.getLatLng();
                     const elev = await fetchElevation(ll.lat, ll.lng);
@@ -320,12 +320,13 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             else if (tool === 'tap') {
                 const m = L.marker(latlng, { icon: icons.current.tap, draggable: true }).addTo(map);
                 const id = Math.random().toString(36).substr(2, 9);
-                m.on('click', () => { if (activeToolRef.current === 'delete') { m.remove(); features.current.taps = features.current.taps.filter(t => t.id !== id); recalcAutoConnections(); } });
+                m.on('click', () => { if (activeToolRef.current === 'delete') { m.remove(); features.current.taps = features.current.taps.filter(t => t.id !== id); recalcAutoConnections(); setAnalysisUpdateTrigger(prev => prev + 1); } });
                 m.on('dragend', async () => {
                     const ll = m.getLatLng();
                     const tap = features.current.taps.find(t => t.id === id);
                     if (tap) { tap.elev = await fetchElevation(ll.lat, ll.lng); }
                     recalcAutoConnections();
+                    setAnalysisUpdateTrigger(prev => prev + 1);
                 });
                 const elev = await fetchElevation(latlng.lat, latlng.lng);
                 features.current.taps.push({ marker: m, elev, id });
@@ -341,9 +342,10 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                         m.remove();
                         features.current.institutions = features.current.institutions.filter(t => t.id !== id);
                         recalcAutoConnections();
+                        setAnalysisUpdateTrigger(prev => prev + 1);
                     }
                 });
-                m.on('dragend', () => recalcAutoConnections()); // Repositioning changes connections potentially
+                m.on('dragend', () => { recalcAutoConnections(); setAnalysisUpdateTrigger(prev => prev + 1); }); // Repositioning changes connections potentially
 
                 features.current.institutions.push({ marker: m, type: tool as any, id });
                 recalcAutoConnections();
@@ -481,7 +483,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
                 // Create a GeoJSON layer
                 buildingsLayer = L.geoJSON(null, {
-                    renderer: L.svg(), // Force SVG renderer
+                    // renderer: L.svg(), // Removed invalid option, handled by map preference
                     style: {
                         fillColor: '#1CABE2',
                         fillOpacity: 0.6,
@@ -632,6 +634,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     poly.remove();
                     features.current.mainLines = features.current.mainLines.filter(ml => ml.id !== id);
                     recalcAutoConnections();
+                    setAnalysisUpdateTrigger(prev => prev + 1);
                 }
             });
             features.current.mainLines.push({ poly, id });
@@ -1023,7 +1026,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             // Draw Visual Buffer for Point Features
             console.log(`Drawing buffers for ${pointFeatures.length} points and ${pipes.length} pipes. Radius: ${bufferDistance}m`);
             pointFeatures.forEach(pt => {
-                L.circle(pt, { radius: bufferDistance, color: '#22c55e', weight: 1, fillOpacity: 0.2, interactive: false, renderer: L.svg() }).addTo(visualBufferLayerRef.current!);
+                L.circle(pt, { radius: bufferDistance, color: '#22c55e', weight: 1, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
             });
 
             // Draw Visual Buffer (Polygons for segments + Circles for joints)
@@ -1032,14 +1035,14 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
                 // Draw circles at vertices (joints)
                 latlngs.forEach(ll => {
-                    L.circle(ll, { radius: bufferDistance, color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false, renderer: L.svg() }).addTo(visualBufferLayerRef.current!);
+                    L.circle(ll, { radius: bufferDistance, color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
                 });
 
                 // Draw buffer polygons for segments
                 for (let i = 0; i < latlngs.length - 1; i++) {
                     const polyCoords = getBufferPolygon(latlngs[i], latlngs[i + 1], bufferDistance);
                     if (polyCoords) {
-                        L.polygon(polyCoords as any, { color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false, renderer: L.svg() }).addTo(visualBufferLayerRef.current!);
+                        L.polygon(polyCoords as any, { color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
                     }
                 }
             });
@@ -1100,7 +1103,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         setServedPop(servedCount * peoplePerBuilding);
         setUnservedPop(unservedCount * peoplePerBuilding);
 
-    }, [bufferDistance, peoplePerBuilding, showOSMBuildings, showGoogleBuildings, buildingsLoading, counts, analysisUpdateTrigger]); // Recalc when pipes change
+    }, [bufferDistance, peoplePerBuilding, showOSMBuildings, showGoogleBuildings, buildingsLoading, analysisUpdateTrigger]); // Removed counts to prevent loop // Recalc when pipes change
 
     // Recalc when pipes change
 

@@ -10,6 +10,7 @@ interface SplashScreenProps {
     setFeedbackText: (text: string) => void;
     handleFeedbackSubmit: () => void;
     isSubmittingFeedback: boolean;
+    zIndex?: number;
 }
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({
@@ -20,12 +21,13 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
     feedbackText,
     setFeedbackText,
     handleFeedbackSubmit,
-    isSubmittingFeedback
+    isSubmittingFeedback,
+    zIndex = 50 // Default z-index
 }) => {
     if (!showSplash) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#003E5E]/95 backdrop-blur-sm text-white px-4">
+        <div className="fixed inset-0 flex items-center justify-center bg-[#003E5E]/95 backdrop-blur-sm text-white px-4" style={{ zIndex }}>
             <div className="max-w-3xl w-full bg-white text-slate-800 rounded-2xl shadow-2xl border border-slate-200 p-8 text-center relative overflow-hidden animate-in fade-in zoom-in duration-300">
                 {/* Decorative background element */}
                 {/* Decorative background element */}

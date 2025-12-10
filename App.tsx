@@ -113,6 +113,7 @@ const App: React.FC = () => {
                 setFeedbackText={setFeedbackText}
                 handleFeedbackSubmit={handleFeedbackSubmit}
                 isSubmittingFeedback={isSubmittingFeedback}
+                zIndex={2000}
             />
 
             {/* Header */}
@@ -365,56 +366,58 @@ const App: React.FC = () => {
             </main>
 
             {/* Persistent Feedback Modal */}
-            {showFeedback && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 relative animate-in fade-in zoom-in duration-200">
-                        <button
-                            onClick={() => setShowFeedback(false)}
-                            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition"
-                        >
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                        <div className="mb-6">
-                            <div className="flex items-center gap-3 mb-2">
-                                <MessageSquare className="w-6 h-6 text-blue-600" />
-                                <h3 className="text-2xl font-bold text-gray-900">Send Feedback</h3>
-                            </div>
-                            <p className="text-sm text-gray-600">Help us improve this tool by sharing your thoughts, suggestions, or reporting issues.</p>
-                        </div>
-                        <textarea
-                            value={feedbackText}
-                            onChange={(e) => setFeedbackText(e.target.value)}
-                            placeholder="Your feedback, suggestions, or contact details..."
-                            className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none mb-4"
-                            rows={6}
-                        />
-                        <div className="flex gap-3">
+            {
+                showFeedback && (
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 relative animate-in fade-in zoom-in duration-200">
                             <button
                                 onClick={() => setShowFeedback(false)}
-                                className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
+                                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition"
                             >
-                                Cancel
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
                             </button>
-                            <button
-                                onClick={handleFeedbackSubmit}
-                                disabled={isSubmittingFeedback || !feedbackText.trim()}
-                                className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                {isSubmittingFeedback ? (
-                                    <>
-                                        <Activity className="w-4 h-4 animate-spin" />
-                                        Sending...
-                                    </>
-                                ) : (
-                                    'Submit Feedback'
-                                )}
-                            </button>
+                            <div className="mb-6">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <MessageSquare className="w-6 h-6 text-blue-600" />
+                                    <h3 className="text-2xl font-bold text-gray-900">Send Feedback</h3>
+                                </div>
+                                <p className="text-sm text-gray-600">Help us improve this tool by sharing your thoughts, suggestions, or reporting issues.</p>
+                            </div>
+                            <textarea
+                                value={feedbackText}
+                                onChange={(e) => setFeedbackText(e.target.value)}
+                                placeholder="Your feedback, suggestions, or contact details..."
+                                className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none mb-4"
+                                rows={6}
+                            />
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowFeedback(false)}
+                                    className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleFeedbackSubmit}
+                                    disabled={isSubmittingFeedback || !feedbackText.trim()}
+                                    className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {isSubmittingFeedback ? (
+                                        <>
+                                            <Activity className="w-4 h-4 animate-spin" />
+                                            Sending...
+                                        </>
+                                    ) : (
+                                        'Submit Feedback'
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
         </div >
     );
 };
