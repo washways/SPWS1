@@ -225,12 +225,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
         setSearching(true);
         try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`, {
-                headers: {
-                    'User-Agent': 'WaterSupplyComparisonTool/1.0',
-                    'Referer': 'https://github.com/your-repo' // Optional but good practice
-                }
-            });
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`);
             const data = await res.json();
             if (data && data.length > 0) {
                 const { lat, lon } = data[0];
@@ -253,8 +248,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         // Changed initial view to Malawi Country Level (Zoom 7)
         const map = L.map(mapContainerRef.current, {
             zoomControl: false,
-            doubleClickZoom: false,
-            preferCanvas: true
+            doubleClickZoom: false
         }).setView([-13.25, 34.3], 7);
 
         mapInstanceRef.current = map;
