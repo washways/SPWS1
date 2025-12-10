@@ -127,6 +127,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     const visualBufferLayerRef = useRef<L.LayerGroup | null>(null);
     const googleBuildingLayerRef = useRef<L.LayerGroup | null>(null);
 
+    // Create a global SVG renderer to prevent Canvas renderer usage
+    const svgRenderer = useRef<L.SVG | null>(null);
+
     // Sync Ref
     useEffect(() => { currentSegmentRef.current = currentSegment; }, [currentSegment]);
     const selectedCountryRef = useRef(selectedCountry);
@@ -234,12 +237,18 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
         if (!mapContainerRef.current || mapInstanceRef.current) return;
 
-        // Use preferCanvas: false to fix clearRect error
+        // Create global SVG renderer instance
+        if (!svgRenderer.current) {
+            svgRenderer.current = L.svg();
+        }
+
+        // Use preferCanvas: false and explicit renderer to fix clearRect error
         const map = L.map(mapContainerRef.current, {
             center: [-13.2543, 34.3015], // Malawi
             zoom: 7,
             zoomControl: false,
-            preferCanvas: false
+            preferCanvas: false,
+            renderer: svgRenderer.current
         });
 
         mapInstanceRef.current = map;
@@ -367,7 +376,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             if (currentSegmentRef.current.length > 0 && activeToolRef.current === 'pipeMain') {
                 const lastPt = currentSegmentRef.current[currentSegmentRef.current.length - 1];
                 if (!features.current.tempLine) {
-                    features.current.tempLine = L.polyline([lastPt, e.latlng], { color: '#ef4444', dashArray: '5, 10' }).addTo(map);
+                    features.current.tempLine = L.polyline([lastPt, e.latlng], { color: '#ef4444', dashArray: '5, 10', renderer: svgRenderer.current! }).addTo(map);
                 } else {
                     features.current.tempLine.setLatLngs([lastPt, e.latlng]);
                 }
@@ -627,7 +636,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
         if (cleanSeg.length > 1) {
             const id = Math.random().toString(36).substr(2, 9);
-            const poly = L.polyline(cleanSeg, { color: '#ef4444', weight: 4, renderer: L.svg() }).addTo(mapInstanceRef.current!);
+            const poly = L.polyline(cleanSeg, { color: '#ef4444', weight: 4, renderer: svgRenderer.current! }).addTo(mapInstanceRef.current!);
             poly.on('click', (e) => {
                 if (activeToolRef.current === 'delete') {
                     L.DomEvent.stopPropagation(e);
@@ -656,7 +665,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             const bhLL = features.current.borehole.marker.getLatLng();
             const tankLL = features.current.tank.marker.getLatLng();
             if (features.current.risingMain) features.current.risingMain.remove();
-            features.current.risingMain = L.polyline([bhLL, tankLL], { color: '#3b82f6', weight: 5, opacity: 0.8, renderer: L.svg() }).addTo(map);
+            features.current.risingMain = L.polyline([bhLL, tankLL], { color: '#3b82f6', weight: 5, opacity: 0.8, renderer: svgRenderer.current! }).addTo(map);
         } else {
             if (features.current.risingMain) { features.current.risingMain.remove(); features.current.risingMain = null; }
         }
@@ -692,7 +701,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 }
 
                 if (connectPt) {
-                    const line = L.polyline([featLL, connectPt], { color: '#10b981', weight: 2, dashArray: '5, 5', renderer: L.svg() }).addTo(map);
+                    const line = L.polyline([featLL, connectPt], { color: '#10b981', weight: 2, dashArray: '5, 5', renderer: svgRenderer.current! }).addTo(map);
                     features.current.distLines.push(line);
                 }
             });
