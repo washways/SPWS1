@@ -386,7 +386,8 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         map.on('dblclick', (e) => {
             if (activeToolRef.current === 'pipeMain' && currentSegmentRef.current.length > 0) {
                 L.DomEvent.stopPropagation(e);
-                L.DomEvent.preventDefault(e);
+                L.DomEvent.preventDefault(e.originalEvent);
+                console.log('Double-click detected, finishing pipe segment');
                 finishSegment();
             }
         });
@@ -949,15 +950,37 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
     // Spatial Analysis Logic
     useEffect(() => {
-        if (!osmBuildingLayerRef.current || !mapInstanceRef.current) return;
+        console.log('Spatial Analysis Effect Running:', {
+            hasOSMBuildings: !!osmBuildingLayerRef.current,
+            hasGoogleBuildings: !!googleBuildingLayerRef.current,
+            hasMap: !!mapInstanceRef.current,
+            bufferDistance,
+            peoplePerBuilding,
+            analysisUpdateTrigger
+        });
+
+        // Check if we have a map and at least one building layer
+        if (!mapInstanceRef.current) {
+            console.log('No map instance, skipping analysis');
+            return;
+        }
+
+        const hasBuildings = osmBuildingLayerRef.current || googleBuildingLayerRef.current;
+        if (!hasBuildings) {
+            console.log('No building layers available, skipping analysis');
+            return;
+        }
 
         // Initialize visual buffer layer if needed (safety check)
         if (!visualBufferLayerRef.current) {
             visualBufferLayerRef.current = L.layerGroup().addTo(mapInstanceRef.current);
+            console.log('Created visual buffer layer');
         } else if (!mapInstanceRef.current.hasLayer(visualBufferLayerRef.current)) {
             visualBufferLayerRef.current.addTo(mapInstanceRef.current);
+            console.log('Added visual buffer layer to map');
         }
         visualBufferLayerRef.current.clearLayers();
+        console.log('Cleared existing buffer layers');
 
         let servedCount = 0;
         let unservedCount = 0;
@@ -1035,9 +1058,11 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         } else {
             // Draw Visual Buffer ONLY for Point Features (Taps, Schools, Clinics, Gardens)
             console.log(`Drawing buffers for ${pointFeatures.length} point features. Radius: ${bufferDistance}m`);
-            pointFeatures.forEach(pt => {
-                L.circle(pt, { radius: bufferDistance, color: '#22c55e', weight: 1, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
+            pointFeatures.forEach((pt, idx) => {
+                const circle = L.circle(pt, { radius: bufferDistance, color: '#22c55e', weight: 1, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
+                console.log(`  Buffer ${idx + 1}: center=[${pt.lat.toFixed(6)}, ${pt.lng.toFixed(6)}], radius=${bufferDistance}m`);
             });
+            console.log(`Successfully drew ${pointFeatures.length} buffer circles`);
 
 
 
