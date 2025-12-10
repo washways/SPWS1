@@ -107,6 +107,18 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     // Search State
     const [servedPop, setServedPop] = useState(0);
     const [unservedPop, setUnservedPop] = useState(0);
+
+    // Search State
+    const [searchQuery, setSearchQuery] = useState("");
+    const [searching, setSearching] = useState(false);
+
+    // Building Footprints State
+    const [showOSMBuildings, setShowOSMBuildings] = useState(false);
+    const [showGoogleBuildings, setShowGoogleBuildings] = useState(false);
+    const [selectedCountry, setSelectedCountry] = useState('MWI'); // Default to Malawi
+    const [buildingsLoading, setBuildingsLoading] = useState(false);
+    const [analysisUpdateTrigger, setAnalysisUpdateTrigger] = useState(0); // Force re-run of analysis
+
     const osmBuildingLayerRef = useRef<L.LayerGroup | null>(null);
     const visualBufferLayerRef = useRef<L.LayerGroup | null>(null);
     const googleBuildingLayerRef = useRef<L.LayerGroup | null>(null);
