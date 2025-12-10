@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import * as L from 'leaflet';
-import { Map as MapIcon, Navigation, Trash2, Settings, CheckCircle, Layers, Disc, Box, Spline, CircleDot, Activity, MousePointerClick, User, Users, Eraser, Search, FileText, Hash, GraduationCap, Stethoscope, Sprout, Zap, Mountain, Home } from 'lucide-react';
+import { Map as MapIcon, Navigation, Trash2, Settings, CheckCircle, Layers, Disc, Box, Spline, CircleDot, Activity, MousePointerClick, MousePointer2, User, Users, Eraser, Search, FileText, Hash, GraduationCap, School, Stethoscope, Sprout, Zap, Mountain, Home, Cylinder, Droplets } from 'lucide-react';
 import { HydraulicInputs, SystemSpecs, BoQItem, PipelineProfile, SystemGeometry, ProjectDetails } from '../types';
 import { DESIGN_COSTS, INSTITUTIONAL_DEMAND } from '../constants';
 import { deserialize } from 'flatgeobuf/lib/mjs/geojson';
