@@ -232,6 +232,20 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
     useEffect(() => {
 
+        if (!mapContainerRef.current || mapInstanceRef.current) return;
+
+        // Use preferCanvas: false to fix clearRect error
+        const map = L.map(mapContainerRef.current, {
+            center: [-13.2543, 34.3015], // Malawi
+            zoom: 7,
+            zoomControl: false,
+            preferCanvas: false
+        });
+
+        mapInstanceRef.current = map;
+        L.control.zoom({ position: 'topright' }).addTo(map);
+        L.control.scale({ position: 'bottomleft', metric: true, imperial: false }).addTo(map);
+
         // Initial layer based on state (street)
         const url = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
         L.tileLayer(url, {
