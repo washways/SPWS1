@@ -384,8 +384,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         });
 
         map.on('dblclick', (e) => {
-            if (activeToolRef.current === 'pipeMain') {
+            if (activeToolRef.current === 'pipeMain' && currentSegmentRef.current.length > 0) {
                 L.DomEvent.stopPropagation(e);
+                L.DomEvent.preventDefault(e);
                 finishSegment();
             }
         });
@@ -1032,28 +1033,10 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 unservedCount++;
             });
         } else {
-            // Draw Visual Buffer for Point Features
-            console.log(`Drawing buffers for ${pointFeatures.length} points and ${pipes.length} pipes. Radius: ${bufferDistance}m`);
+            // Draw Visual Buffer ONLY for Point Features (Taps, Schools, Clinics, Gardens)
+            console.log(`Drawing buffers for ${pointFeatures.length} point features. Radius: ${bufferDistance}m`);
             pointFeatures.forEach(pt => {
                 L.circle(pt, { radius: bufferDistance, color: '#22c55e', weight: 1, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
-            });
-
-            // Draw Visual Buffer (Polygons for segments + Circles for joints)
-            pipes.forEach(pipe => {
-                const latlngs = pipe.getLatLngs() as L.LatLng[];
-
-                // Draw circles at vertices (joints)
-                latlngs.forEach(ll => {
-                    L.circle(ll, { radius: bufferDistance, color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
-                });
-
-                // Draw buffer polygons for segments
-                for (let i = 0; i < latlngs.length - 1; i++) {
-                    const polyCoords = getBufferPolygon(latlngs[i], latlngs[i + 1], bufferDistance);
-                    if (polyCoords) {
-                        L.polygon(polyCoords as any, { color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
-                    }
-                }
             });
 
 
@@ -1109,10 +1092,12 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             }
         }
 
+        console.log(`Analysis complete: ${servedCount} served buildings, ${unservedCount} unserved buildings`);
+        console.log(`Population: ${servedCount * peoplePerBuilding} served, ${unservedCount * peoplePerBuilding} unserved`);
         setServedPop(servedCount * peoplePerBuilding);
         setUnservedPop(unservedCount * peoplePerBuilding);
 
-    }, [bufferDistance, peoplePerBuilding, showOSMBuildings, showGoogleBuildings, buildingsLoading, analysisUpdateTrigger]); // Removed counts to prevent loop // Recalc when pipes change
+    }, [bufferDistance, peoplePerBuilding, showOSMBuildings, showGoogleBuildings, buildingsLoading, analysisUpdateTrigger]); // Removed counts to prevent loop
 
     // Recalc when pipes change
 
