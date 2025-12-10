@@ -201,21 +201,8 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     };
 
     const fetchLocationName = async (lat: number, lng: number) => {
-        try {
-            // Reverse Geocoding to get Village/Town name
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-            const data = await res.json();
-            const address = data.address;
-            if (address) {
-                // Prioritize village, hamlet, town, etc.
-                const name = address.village || address.hamlet || address.town || address.suburb || address.city || address.locality || "Unknown Site";
-                return name;
-            }
-            return null;
-        } catch (e) {
-            // console.error("Reverse geocoding failed", e); // Suppress error to avoid console noise
-            return null;
-        }
+        // Disabled to prevent CORS errors on static deployment
+        return null;
     };
 
     // Search Handler
@@ -488,6 +475,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
                 // Create a GeoJSON layer
                 buildingsLayer = L.geoJSON(null, {
+                    renderer: L.svg(), // Force SVG renderer
                     style: {
                         fillColor: '#1CABE2',
                         fillOpacity: 0.6,
@@ -631,7 +619,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
         if (cleanSeg.length > 1) {
             const id = Math.random().toString(36).substr(2, 9);
-            const poly = L.polyline(cleanSeg, { color: '#ef4444', weight: 4 }).addTo(mapInstanceRef.current!);
+            const poly = L.polyline(cleanSeg, { color: '#ef4444', weight: 4, renderer: L.svg() }).addTo(mapInstanceRef.current!);
             poly.on('click', (e) => {
                 if (activeToolRef.current === 'delete') {
                     L.DomEvent.stopPropagation(e);
@@ -659,7 +647,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             const bhLL = features.current.borehole.marker.getLatLng();
             const tankLL = features.current.tank.marker.getLatLng();
             if (features.current.risingMain) features.current.risingMain.remove();
-            features.current.risingMain = L.polyline([bhLL, tankLL], { color: '#3b82f6', weight: 5, opacity: 0.8 }).addTo(map);
+            features.current.risingMain = L.polyline([bhLL, tankLL], { color: '#3b82f6', weight: 5, opacity: 0.8, renderer: L.svg() }).addTo(map);
         } else {
             if (features.current.risingMain) { features.current.risingMain.remove(); features.current.risingMain = null; }
         }
@@ -695,7 +683,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 }
 
                 if (connectPt) {
-                    const line = L.polyline([featLL, connectPt], { color: '#10b981', weight: 2, dashArray: '5, 5' }).addTo(map);
+                    const line = L.polyline([featLL, connectPt], { color: '#10b981', weight: 2, dashArray: '5, 5', renderer: L.svg() }).addTo(map);
                     features.current.distLines.push(line);
                 }
             });
@@ -1031,7 +1019,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             // Draw Visual Buffer for Point Features
             console.log(`Drawing buffers for ${pointFeatures.length} points and ${pipes.length} pipes. Radius: ${bufferDistance}m`);
             pointFeatures.forEach(pt => {
-                L.circle(pt, { radius: bufferDistance, color: '#22c55e', weight: 1, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
+                L.circle(pt, { radius: bufferDistance, color: '#22c55e', weight: 1, fillOpacity: 0.2, interactive: false, renderer: L.svg() }).addTo(visualBufferLayerRef.current!);
             });
 
             // Draw Visual Buffer (Polygons for segments + Circles for joints)
@@ -1040,14 +1028,14 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
                 // Draw circles at vertices (joints)
                 latlngs.forEach(ll => {
-                    L.circle(ll, { radius: bufferDistance, color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
+                    L.circle(ll, { radius: bufferDistance, color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false, renderer: L.svg() }).addTo(visualBufferLayerRef.current!);
                 });
 
                 // Draw buffer polygons for segments
                 for (let i = 0; i < latlngs.length - 1; i++) {
                     const polyCoords = getBufferPolygon(latlngs[i], latlngs[i + 1], bufferDistance);
                     if (polyCoords) {
-                        L.polygon(polyCoords as any, { color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
+                        L.polygon(polyCoords as any, { color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false, renderer: L.svg() }).addTo(visualBufferLayerRef.current!);
                     }
                 }
             });
