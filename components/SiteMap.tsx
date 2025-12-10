@@ -4,7 +4,7 @@ import * as L from 'leaflet';
 import { Map as MapIcon, Navigation, Trash2, Settings, CheckCircle, Layers, Disc, Box, Spline, CircleDot, Activity, MousePointerClick, User, Users, Eraser, Search, FileText, Hash, GraduationCap, Stethoscope, Sprout, Zap, Mountain, Home } from 'lucide-react';
 import { HydraulicInputs, SystemSpecs, BoQItem, PipelineProfile, SystemGeometry, ProjectDetails } from '../types';
 import { DESIGN_COSTS, INSTITUTIONAL_DEMAND } from '../constants';
-import { deserialize } from 'flatgeobuf';
+import { deserialize } from 'flatgeobuf/lib/mjs/geojson';
 
 interface SiteMapProps {
     population: number;
@@ -475,6 +475,16 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 const fgbUrl = `https://data.source.coop/vida/google-microsoft-open-buildings/flatgeobuf/by_country/country_iso=${selectedCountry}/${selectedCountry}.fgb`;
                 console.log(`Loading Google Buildings (FGB) for ${selectedCountry}: ${fgbUrl}`);
 
+                // Check if resource is reachable before trying to deserialize
+                try {
+                    const headRes = await fetch(fgbUrl, { method: 'HEAD' });
+                    if (!headRes.ok) {
+                        throw new Error(`FGB URL not reachable: ${headRes.status} ${headRes.statusText}`);
+                    }
+                } catch (netErr) {
+                    console.warn("Network check failed for FGB, trying to proceed anyway...", netErr);
+                }
+
                 // Create a GeoJSON layer
                 buildingsLayer = L.geoJSON(null, {
                     style: {
@@ -504,6 +514,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
                         try {
                             // Use flatgeobuf to fetch features in bounds
+                            // Note: deserialize uses fetch internally with Range headers
                             const iter = deserialize(fgbUrl, rect);
                             let count = 0;
                             for await (const feature of iter) {
@@ -511,8 +522,13 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 count++;
                             }
                             console.log(`Loaded ${count} Google Buildings features`);
+
+                            if (count === 0) {
+                                console.log("No buildings found in this area (or FGB load failed silently).");
+                            }
                         } catch (e) {
                             console.error('Error fetching FGB features:', e);
+                            // Do not alert constantly on move
                         }
                     };
 
@@ -527,7 +543,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 }
             } catch (error) {
                 console.error('Failed to load Google Buildings:', error);
-                alert(`Google Buildings failed to load for ${selectedCountry}. Try OSM Buildings.`);
+                alert(`Google Buildings failed to load for ${selectedCountry}. Please check your internet connection or try OSM Buildings.`);
                 setShowGoogleBuildings(false);
                 setShowOSMBuildings(true);
             }
