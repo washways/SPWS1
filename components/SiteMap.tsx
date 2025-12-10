@@ -1051,10 +1051,17 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
         if (pipes.length === 0 && pointFeatures.length === 0) {
             // No pipes or points, all unserved
-            osmBuildingLayerRef.current.eachLayer((layer: any) => {
-                if (layer.setStyle) layer.setStyle({ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.3, weight: 1 });
-                unservedCount++;
-            });
+            const activeBuildingLayer = showGoogleBuildings && googleBuildingLayerRef.current ? googleBuildingLayerRef.current : osmBuildingLayerRef.current;
+
+            if (activeBuildingLayer) {
+                console.log('No infrastructure - marking all buildings as unserved');
+                activeBuildingLayer.eachLayer((layer: any) => {
+                    if (layer.setStyle) layer.setStyle({ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.3, weight: 1 });
+                    unservedCount++;
+                });
+            } else {
+                console.log('No building layer available for unserved analysis');
+            }
         } else {
             // Draw Visual Buffer ONLY for Point Features (Taps, Schools, Clinics, Gardens)
             console.log(`Drawing buffers for ${pointFeatures.length} point features. Radius: ${bufferDistance}m`);
