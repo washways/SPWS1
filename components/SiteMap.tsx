@@ -463,9 +463,94 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         fetchAndDisplayOSMBuildings();
     }, [showOSMBuildings]);
 
-    // Google Buildings Layer (PMTiles - Production)
+    // Google Buildings Layer (FlatGeobuf)
     useEffect(() => {
+        console.log('Google Buildings Effect Triggered. Show:', showGoogleBuildings, 'Map:', !!mapInstanceRef.current);
         if (!mapInstanceRef.current || !showGoogleBuildings) return;
+
+        let buildingsLayer: any = null;
+
+        const loadGoogleBuildings = async () => {
+            try {
+                const fgbUrl = `https://data.source.coop/vida/google-microsoft-open-buildings/flatgeobuf/by_country/country_iso=${selectedCountry}/${selectedCountry}.fgb`;
+                console.log(`Loading Google Buildings (FGB) for ${selectedCountry}: ${fgbUrl}`);
+
+                // Create a GeoJSON layer
+                buildingsLayer = L.geoJSON(null, {
+                    style: {
+                        fillColor: '#1CABE2',
+                        fillOpacity: 0.6,
+                        color: '#003E5E',
+                        weight: 1
+                    }
+                });
+
+                if (mapInstanceRef.current) {
+                    buildingsLayer.addTo(mapInstanceRef.current);
+
+                    // Function to update features based on bounds
+                    const updateFeatures = async () => {
+                        if (!mapInstanceRef.current) return;
+                        const bounds = mapInstanceRef.current.getBounds();
+                        const rect = {
+                            minX: bounds.getWest(),
+                            minY: bounds.getSouth(),
+                            maxX: bounds.getEast(),
+                            maxY: bounds.getNorth()
+                        };
+
+                        // Clear existing layers to avoid duplicates/memory issues
+                        buildingsLayer.clearLayers();
+
+                        try {
+                            // Use flatgeobuf to fetch features in bounds
+                            const iter = deserialize(fgbUrl, rect);
+                            let count = 0;
+                            for await (const feature of iter) {
+                                buildingsLayer.addData(feature as any);
+                                count++;
+                            }
+                            console.log(`Loaded ${count} Google Buildings features`);
+                        } catch (e) {
+                            console.error('Error fetching FGB features:', e);
+                        }
+                    };
+
+                    // Initial load
+                    updateFeatures();
+
+                    // Add event listener for map movement
+                    mapInstanceRef.current.on('moveend', updateFeatures);
+
+                    // Store reference for cleanup
+                    (buildingsLayer as any)._updateFeatures = updateFeatures;
+                }
+            } catch (error) {
+                console.error('Failed to load Google Buildings:', error);
+                alert(`Google Buildings failed to load for ${selectedCountry}. Try OSM Buildings.`);
+                setShowGoogleBuildings(false);
+                setShowOSMBuildings(true);
+            }
+        };
+
+        loadGoogleBuildings();
+
+        return () => {
+            if (buildingsLayer) {
+                if (mapInstanceRef.current) {
+                    mapInstanceRef.current.removeLayer(buildingsLayer);
+                    if ((buildingsLayer as any)._updateFeatures) {
+                        mapInstanceRef.current.off('moveend', (buildingsLayer as any)._updateFeatures);
+                    }
+                }
+                buildingsLayer = null;
+            }
+        };
+    }, [showGoogleBuildings, selectedCountry]);
+
+    // Map Style Layer
+    useEffect(() => {
+        if (!mapInstanceRef.current) return;
         let url = '';
         if (mapStyle === 'street') {
             url = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -1020,8 +1105,8 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 {buildingsLoading && <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow text-xs font-bold text-green-600 flex items-center gap-2 z-[400]"><Activity className="w-3 h-3 animate-spin" /> Loading Buildings...</div>}
                 <div className="absolute top-4 right-4 bg-white rounded-lg shadow-md border border-gray-200 p-1 flex flex-col gap-1 z-[400]">
                     <div className="flex gap-1">
-                        <button onClick={() => setShowOSMBuildings(!showOSMBuildings)} className={`p-1.5 rounded ${showOSMBuildings ? 'bg-[#1CABE2]/20 text-[#003E5E]' : 'hover:bg-gray-100 text-gray-700'}`} title="OSM Buildings (Development)"><Home className="w-4 h-4" /></button>
-                        <button onClick={() => setShowGoogleBuildings(!showGoogleBuildings)} className={`p-1.5 rounded ${showGoogleBuildings ? 'bg-[#1CABE2]/20 text-[#003E5E]' : 'hover:bg-gray-100 text-gray-700'}`} title="Google Buildings (Production Only)"><Box className="w-4 h-4" /></button>
+                        <button onClick={() => { console.log('Toggling OSM Buildings'); setShowOSMBuildings(!showOSMBuildings); }} className={`p-1.5 rounded ${showOSMBuildings ? 'bg-[#1CABE2]/20 text-[#003E5E]' : 'hover:bg-gray-100 text-gray-700'}`} title="OSM Buildings (Development)"><Home className="w-4 h-4" /></button>
+                        <button onClick={() => { console.log('Toggling Google Buildings'); setShowGoogleBuildings(!showGoogleBuildings); if (!showGoogleBuildings) setShowOSMBuildings(false); }} className={`p-1.5 rounded ${showGoogleBuildings ? 'bg-[#1CABE2]/20 text-[#003E5E]' : 'hover:bg-gray-100 text-gray-700'}`} title="Google Buildings (Production Only)"><Box className="w-4 h-4" /></button>
                     </div>
                     <div className="w-full h-px bg-gray-300"></div>
                     <div className="flex gap-1">
