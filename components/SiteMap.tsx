@@ -1188,245 +1188,51 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     </div>
                     <div className="w-full h-px bg-gray-300"></div>
                     <div className="flex gap-1">
-```
-            const bufferDegLat = bufferMeters / metersPerDegLat;
-            const bufferDegLng = bufferMeters / metersPerDegLng;
-
-            // Perpendicular vector (-dy, dx) normalized
-            const ux = -dy / len;
-            const uy = dx / len;
-
-            // Offset points
-            const offX = ux * bufferDegLng;
-            const offY = uy * bufferDegLat;
-
-            return [
-                [p1.lat + offY, p1.lng + offX],
-                [p2.lat + offY, p2.lng + offX],
-                [p2.lat - offY, p2.lng - offX],
-                [p1.lat - offY, p1.lng - offX]
-            ];
-        };
-
-        if (pipes.length === 0 && pointFeatures.length === 0) {
-            // No pipes or points, all unserved
-            osmBuildingLayerRef.current.eachLayer((layer: any) => {
-                if (layer.setStyle) layer.setStyle({ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.3, weight: 1 });
-                unservedCount++;
-            });
-        } else {
-            // Draw Visual Buffer for Point Features
-            console.log(`Drawing buffers for ${pointFeatures.length} points and ${pipes.length} pipes. Radius: ${bufferDistance}m`);
-            pointFeatures.forEach(pt => {
-                L.circle(pt, { radius: bufferDistance, color: '#22c55e', weight: 1, fillOpacity: 0.2, interactive: false, renderer: L.svg() }).addTo(visualBufferLayerRef.current!);
-            });
-
-            // Draw Visual Buffer (Polygons for segments + Circles for joints)
-            pipes.forEach(pipe => {
-                const latlngs = pipe.getLatLngs() as L.LatLng[];
-
-                // Draw circles at vertices (joints)
-                latlngs.forEach(ll => {
-                    L.circle(ll, { radius: bufferDistance, color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false, renderer: L.svg() }).addTo(visualBufferLayerRef.current!);
-                });
-
-                // Draw buffer polygons for segments
-                for (let i = 0; i < latlngs.length - 1; i++) {
-                    const polyCoords = getBufferPolygon(latlngs[i], latlngs[i + 1], bufferDistance);
-                    if (polyCoords) {
-                        L.polygon(polyCoords as any, { color: '#22c55e', weight: 0, fillOpacity: 0.2, interactive: false, renderer: L.svg() }).addTo(visualBufferLayerRef.current!);
-                    }
-                }
-            });
-
-
-
-            // Determine which building layer to use
-            const activeBuildingLayer = showGoogleBuildings && googleBuildingLayerRef.current ? googleBuildingLayerRef.current : osmBuildingLayerRef.current;
-
-            if (activeBuildingLayer) {
-                console.log("Running service analysis on layer:", showGoogleBuildings ? "Google" : "OSM");
-                activeBuildingLayer.eachLayer((layer: any) => {
-                    // Google Buildings (FGB) features might be different structure than OSM
-                    // OSM: layer.feature.geometry.type === 'Polygon'
-                    // FGB: layer.feature.geometry.type === 'Polygon' (usually)
-
-                    if (layer.feature && (layer.feature.geometry.type === 'Polygon' || layer.feature.geometry.type === 'MultiPolygon')) {
-                        const bounds = layer.getBounds();
-                        const center = bounds.getCenter();
-
-                        let isServed = false;
-
-                        // Check distance to pipes
-                        for (const pipe of pipes) {
-                            const pipeLatLngs = pipe.getLatLngs() as L.LatLng[];
-                            for (let i = 0; i < pipeLatLngs.length - 1; i++) {
-                                const dist = getDistToSegmentMeters(center, pipeLatLngs[i], pipeLatLngs[i + 1]);
-                                if (dist <= bufferDistance) {
-                                    isServed = true;
-                                    break;
-                                }
-                            }
-                            if (isServed) break;
-                        }
-
-                        // Check distance to point features (if not already served)
-                        if (!isServed) {
-                            for (const pt of pointFeatures) {
-                                if (center.distanceTo(pt) <= bufferDistance) {
-                                    isServed = true;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (isServed) {
-                            layer.setStyle({ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.5, weight: 2 }); // Green, thicker
-                            servedCount++;
-                        } else {
-                            layer.setStyle({ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.3, weight: 1 }); // Red
-                            unservedCount++;
-                        }
-                    }
-                });
-            }
-        }
-
-        setServedPop(servedCount * peoplePerBuilding);
-        setUnservedPop(unservedCount * peoplePerBuilding);
-
-    }, [bufferDistance, peoplePerBuilding, showOSMBuildings, showGoogleBuildings, buildingsLoading, counts, analysisUpdateTrigger]); // Recalc when pipes change
-
-    // Recalc when pipes change
-
-    return (
-        <div className="flex flex-col md:flex-row gap-4 h-[calc(100vh-140px)] relative">
-
-            {/* 1. ENGINEERING PANEL */}
-            <div className="order-2 md:order-1 w-full md:w-80 flex flex-col gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-y-auto max-h-[40%] md:max-h-full">
-                <div className="mb-2">
-                    <form onSubmit={handleSearch} className="relative mb-2">
-                        <input type="text" placeholder="Search Location..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1CABE2] outline-none shadow-sm" />
-                        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-                    </form>
-                    <h3 className="font-bold text-[#003E5E] flex items-center gap-2 border-b border-gray-200 pb-2"><Settings className="w-4 h-4" /> Design Parameters</h3>
-                </div>
-                <div className="space-y-4 text-sm">
-                    {/* Spatial Analysis Inputs */}
-                    <div className="p-2 bg-blue-50 rounded border border-blue-100 mb-2">
-                        <h4 className="font-bold text-blue-800 text-xs mb-2">Service Coverage</h4>
-                        <div className="space-y-2">
-                            <div>
-                                <label className="block text-gray-600 text-xs font-bold mb-1" title="Distance from pipe to be considered served">Service Buffer (m)</label>
-                                <input
-                                    type="number"
-                                    value={bufferDistance}
-                                    onChange={e => setBufferDistance(Math.max(0, parseFloat(e.target.value) || 0))}
-                                    className="w-full p-1.5 border rounded text-xs"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-gray-600 text-xs font-bold mb-1" title="Average people per household/building">People per Building</label>
-                                <input
-                                    type="number"
-                                    value={peoplePerBuilding}
-                                    onChange={e => setPeoplePerBuilding(Math.max(1, parseFloat(e.target.value) || 1))}
-                                    className="w-full p-1.5 border rounded text-xs"
-                                />
-                            </div>
-                            <div className="flex justify-between text-xs pt-1 border-t border-blue-200 mt-1">
-                                <span className="text-green-700 font-bold">Served: {servedPop.toLocaleString()}</span>
-                                <span className="text-red-700 font-bold">Unserved: {unservedPop.toLocaleString()}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-gray-600 text-xs font-bold mb-1">Target Population</label>
-                        <div className="flex gap-2">
-                            <input type="number" value={population} onChange={e => setPopulation(parseFloat(e.target.value) || 0)} className="w-full p-2 border rounded" />
-                            <button
-                                onClick={() => setPopulation(servedPop)}
-                                className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold hover:bg-blue-200 transition"
-                                title={`Sync with Spatial Analysis (Currently Served: ${servedPop.toLocaleString()})`}
-                            >
-                                Sync
-                            </button>
-                        </div>
-                        <div className="text-[10px] text-gray-500 mt-1 text-right">
-                            Spatial Estimate: <strong>{servedPop.toLocaleString()}</strong>
-                        </div>
-                    </div>
-                    <div><label className="block text-gray-600 text-xs font-bold mb-1">Borehole Depth (m)</label><input type="number" value={inputs.boreholeDepth} onChange={e => setInputs({ ...inputs, boreholeDepth: parseFloat(e.target.value) || 0 })} className="w-full p-2 border rounded" /></div>
-                    <div><label className="block text-gray-600 text-xs font-bold mb-1">Static Water Level (m)</label><input type="number" value={inputs.staticWaterLevel} onChange={e => setInputs({ ...inputs, staticWaterLevel: parseFloat(e.target.value) || 0 })} className="w-full p-2 border rounded" /></div>
-                    <div><label className="block text-gray-600 text-xs font-bold mb-1">Tank Stand Height (m)</label>
-                        <select value={inputs.tankHeight} onChange={e => setInputs({ ...inputs, tankHeight: parseFloat(e.target.value) })} className="w-full p-2 border rounded"><option value={3}>3m</option><option value={6}>6m</option><option value={9}>9m</option></select>
-                    </div>
-                </div>
-                <div className="mt-auto bg-slate-800 text-white p-4 rounded-lg text-xs space-y-2">
-                    <div className="flex justify-between"><span>Borehole:</span><span className={counts.hasBh ? "text-emerald-400 font-bold" : "text-gray-500"}>{counts.hasBh ? "Set" : "Missing"}</span></div>
-                    <div className="flex justify-between"><span>Tank:</span><span className={counts.hasTank ? "text-emerald-400 font-bold" : "text-gray-500"}>{counts.hasTank ? "Set" : "Missing"}</span></div>
-                    <div className="flex justify-between"><span>Taps:</span><span className="font-bold">{counts.taps}</span></div>
-                    <div className="flex justify-between"><span>Institutions:</span><span className="font-bold">{counts.schools + counts.clinics + counts.gardens}</span></div>
-                    <div className="flex justify-between border-t border-slate-600 pt-2"><span>Total Pipe:</span><span className="font-bold">{(counts.risingLen + counts.mainLen + counts.distLen).toLocaleString()} m</span></div>
-                </div>
-                <button onClick={handleApply} disabled={!counts.hasBh || !counts.hasTank} className="w-full py-3 bg-[#1CABE2] hover:bg-[#003E5E] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow transition flex items-center justify-center gap-2"><CheckCircle className="w-4 h-4" /> Apply Design</button>
-            </div>
-
-            {/* 2. MAP AREA */}
-            <div className="order-1 md:order-2 flex-1 relative min-h-[400px] md:h-full bg-gray-100 rounded-xl overflow-hidden shadow-inner border border-gray-300">
-                <div ref={mapContainerRef} className="w-full h-full z-0 min-h-[400px]" style={{ minHeight: '400px' }} />
-                {loadingElevation && <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow text-xs font-bold text-blue-600 flex items-center gap-2 z-[400]"><Activity className="w-3 h-3 animate-spin" /> Fetching Elevation...</div>}
-                {buildingsLoading && <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow text-xs font-bold text-green-600 flex items-center gap-2 z-[400]"><Activity className="w-3 h-3 animate-spin" /> Loading Buildings...</div>}
-                <div className="absolute top-4 right-4 bg-white rounded-lg shadow-md border border-gray-200 p-1 flex flex-col gap-1 z-[400]">
-                    <div className="flex gap-1">
-                        <button onClick={() => { console.log('Toggling OSM Buildings'); setShowOSMBuildings(!showOSMBuildings); }} className={`p-1.5 rounded ${showOSMBuildings ? 'bg-[#1CABE2]/20 text-[#003E5E]' : 'hover:bg-gray-100 text-gray-700'}`} title="OSM Buildings (Development)"><Home className="w-4 h-4" /></button>
-                        <button onClick={() => { console.log('Toggling Google Buildings'); setShowGoogleBuildings(!showGoogleBuildings); if (!showGoogleBuildings) setShowOSMBuildings(false); }} className={`p-1.5 rounded ${showGoogleBuildings ? 'bg-[#1CABE2]/20 text-[#003E5E]' : 'hover:bg-gray-100 text-gray-700'}`} title="Google Buildings (Production Only)"><Box className="w-4 h-4" /></button>
-                    </div>
-                    <div className="w-full h-px bg-gray-300"></div>
-                    <div className="flex gap-1">
                         <button onClick={() => setMapStyle('street')} className={`p-1.5 rounded ${mapStyle === 'street' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Street View"><MapIcon className="w-4 h-4 text-gray-700" /></button>
                         <button onClick={() => setMapStyle('satellite')} className={`p-1.5 rounded ${mapStyle === 'satellite' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Satellite View"><Layers className="w-4 h-4 text-gray-700" /></button>
                         <button onClick={() => setMapStyle('hybrid')} className={`p-1.5 rounded ${mapStyle === 'hybrid' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Hybrid View"><Layers className="w-4 h-4 text-blue-600" /></button>
                         <button onClick={() => setMapStyle('topo')} className={`p-1.5 rounded ${mapStyle === 'topo' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Terrain/Topography"><Mountain className="w-4 h-4 text-gray-700" /></button>
                     </div>
-              {/* Map Controls */}
-            <div className="absolute top-4 left-4 z-[500] flex flex-col gap-2">
-                <div className="bg-white p-2 rounded-lg shadow-md flex flex-col gap-2">
-                    <div className="grid grid-cols-2 gap-2">
-                        <ToolButton tool="select" icon={MousePointer2} label="Select" />
-                        <ToolButton tool="delete" icon={Trash2} label="Delete" />
-                    </div>
-                    <div className="h-px bg-gray-200 my-1" />
-                    <p className="text-xs font-semibold text-gray-500 mb-1">Source</p>
-                    <div className="grid grid-cols-2 gap-2">
-                        <ToolButton tool="borehole" icon={CircleDot} label="Borehole" />
-                        <ToolButton tool="tank" icon={Cylinder} label="Tank" />
-                    </div>
-                    <div className="h-px bg-gray-200 my-1" />
-                    <p className="text-xs font-semibold text-gray-500 mb-1">Network</p>
-                    <div className="grid grid-cols-2 gap-2">
-                        <ToolButton tool="pipeMain" icon={Activity} label="Pipe" />
-                        <ToolButton tool="tap" icon={Droplets} label="Tap" />
-                    </div>
-                    {isDrawing && (
-                        <button
-                            onClick={finishSegment}
-                            className="mt-2 bg-green-600 text-white p-2 rounded text-xs font-bold hover:bg-green-700 transition-colors"
-                        >
-                            Finish Pipe
-                        </button>
-                    )}
-                    <div className="h-px bg-gray-200 my-1" />
-                    <p className="text-xs font-semibold text-gray-500 mb-1">Institutions</p>
-                    <div className="grid grid-cols-2 gap-2">
-                        <ToolButton tool="school" icon={School} label="School" />
-                        <ToolButton tool="clinic" icon={Stethoscope} label="Clinic" />
-                        <ToolButton tool="garden" icon={Sprout} label="Garden" />
-                        <ToolButton tool="grid" icon={Zap} label="Grid" />
+                </div>
+
+                {/* Map Controls */}
+                <div className="absolute top-4 left-4 z-[500] flex flex-col gap-2">
+                    <div className="bg-white p-2 rounded-lg shadow-md flex flex-col gap-2">
+                        <div className="grid grid-cols-2 gap-2">
+                            <ToolButton tool="select" icon={MousePointer2} label="Select" />
+                            <ToolButton tool="delete" icon={Trash2} label="Delete" />
+                        </div>
+                        <div className="h-px bg-gray-200 my-1" />
+                        <p className="text-xs font-semibold text-gray-500 mb-1">Source</p>
+                        <div className="grid grid-cols-2 gap-2">
+                            <ToolButton tool="borehole" icon={CircleDot} label="Borehole" />
+                            <ToolButton tool="tank" icon={Cylinder} label="Tank" />
+                        </div>
+                        <div className="h-px bg-gray-200 my-1" />
+                        <p className="text-xs font-semibold text-gray-500 mb-1">Network</p>
+                        <div className="grid grid-cols-2 gap-2">
+                            <ToolButton tool="pipeMain" icon={Activity} label="Pipe" />
+                            <ToolButton tool="tap" icon={Droplets} label="Tap" />
+                        </div>
+                        {isDrawing && (
+                            <button
+                                onClick={finishSegment}
+                                className="mt-2 bg-green-600 text-white p-2 rounded text-xs font-bold hover:bg-green-700 transition-colors"
+                            >
+                                Finish Pipe
+                            </button>
+                        )}
+                        <div className="h-px bg-gray-200 my-1" />
+                        <p className="text-xs font-semibold text-gray-500 mb-1">Institutions</p>
+                        <div className="grid grid-cols-2 gap-2">
+                            <ToolButton tool="school" icon={School} label="School" />
+                            <ToolButton tool="clinic" icon={Stethoscope} label="Clinic" />
+                            <ToolButton tool="garden" icon={Sprout} label="Garden" />
+                            <ToolButton tool="grid" icon={Zap} label="Grid" />
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     );
 };
-```
