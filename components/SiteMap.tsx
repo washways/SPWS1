@@ -950,6 +950,42 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     );
 
 
+    // Immediate Buffer Drawing - Draw buffers as soon as point features are placed
+    useEffect(() => {
+        if (!mapInstanceRef.current) return;
+
+        // Initialize visual buffer layer if needed
+        if (!visualBufferLayerRef.current) {
+            visualBufferLayerRef.current = L.layerGroup().addTo(mapInstanceRef.current);
+            console.log('Created visual buffer layer for immediate drawing');
+        } else if (!mapInstanceRef.current.hasLayer(visualBufferLayerRef.current)) {
+            visualBufferLayerRef.current.addTo(mapInstanceRef.current);
+        }
+
+        // Clear existing buffers
+        visualBufferLayerRef.current.clearLayers();
+
+        // Collect all point features (Taps, Schools, Clinics, Gardens)
+        const pointFeatures: L.LatLng[] = [
+            ...features.current.taps.map(t => t.marker.getLatLng()),
+            ...features.current.institutions.map(i => i.marker.getLatLng())
+        ];
+
+        // Draw buffers around each point feature
+        console.log(`Drawing ${pointFeatures.length} buffers immediately (radius: ${bufferDistance}m)`);
+        pointFeatures.forEach((pt, idx) => {
+            L.circle(pt, {
+                radius: bufferDistance,
+                color: '#22c55e',
+                weight: 1,
+                fillOpacity: 0.2,
+                interactive: false
+            }).addTo(visualBufferLayerRef.current!);
+        });
+
+    }, [bufferDistance, analysisUpdateTrigger]); // Redraw when buffer distance changes or features update
+
+
     // Spatial Analysis Logic
     useEffect(() => {
         console.log('Spatial Analysis Effect Running:', {
@@ -1065,13 +1101,8 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 console.log('No building layer available for unserved analysis');
             }
         } else {
-            // Draw Visual Buffer ONLY for Point Features (Taps, Schools, Clinics, Gardens)
-            console.log(`Drawing buffers for ${pointFeatures.length} point features. Radius: ${bufferDistance}m`);
-            pointFeatures.forEach((pt, idx) => {
-                const circle = L.circle(pt, { radius: bufferDistance, color: '#22c55e', weight: 1, fillOpacity: 0.2, interactive: false }).addTo(visualBufferLayerRef.current!);
-                console.log(`  Buffer ${idx + 1}: center=[${pt.lat.toFixed(6)}, ${pt.lng.toFixed(6)}], radius=${bufferDistance}m`);
-            });
-            console.log(`Successfully drew ${pointFeatures.length} buffer circles`);
+            // Buffers are now drawn by the immediate buffer effect above
+            // This section only handles building analysis for population calculation
 
 
 
