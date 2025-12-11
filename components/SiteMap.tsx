@@ -594,19 +594,19 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             // OpenTopoMap for hydraulic planning
             url = 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
         } else if (mapStyle === 'hybrid') {
-            // Use Mapbox satellite imagery with OSM labels overlay
-            url = 'https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.jpg?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw';
-            labelsUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+            // Use Google Maps hybrid (satellite + labels)
+            url = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}';
         }
 
         // Update TileLayer with crossOrigin for PDF export compatibility
         const tileLayer = L.tileLayer(url, {
-            attribution: mapStyle === 'topo' ? 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)' : 'Map data',
+            attribution: mapStyle === 'topo' ? 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)' : mapStyle === 'hybrid' ? 'Map data: © Google' : 'Map data',
             maxZoom: 22,
             crossOrigin: true
         }).addTo(mapInstanceRef.current);
 
         let labelsLayer: L.TileLayer | null = null;
+        // Hybrid map now uses Google's built-in labels, no separate layer needed
         if (labelsUrl) {
             // Create a custom pane for labels if it doesn't exist
             if (!mapInstanceRef.current.getPane('labels')) {
@@ -1198,17 +1198,51 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 <div ref={mapContainerRef} className="w-full h-full z-0 min-h-[400px]" style={{ minHeight: '400px' }} />
                 {loadingElevation && <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow text-xs font-bold text-blue-600 flex items-center gap-2 z-[400]"><Activity className="w-3 h-3 animate-spin" /> Fetching Elevation...</div>}
                 {buildingsLoading && <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow text-xs font-bold text-green-600 flex items-center gap-2 z-[400]"><Activity className="w-3 h-3 animate-spin" /> Loading Buildings...</div>}
-                <div className="absolute top-4 right-4 bg-white rounded-lg shadow-md border border-gray-200 p-1 flex flex-col gap-1 z-[400]">
-                    <div className="flex gap-1">
-                        <button onClick={() => { console.log('Toggling OSM Buildings'); setShowOSMBuildings(!showOSMBuildings); }} className={`p-1.5 rounded ${showOSMBuildings ? 'bg-[#1CABE2]/20 text-[#003E5E]' : 'hover:bg-gray-100 text-gray-700'}`} title="OSM Buildings (Development)"><Home className="w-4 h-4" /></button>
-                        <button onClick={() => { console.log('Toggling Google Buildings'); setShowGoogleBuildings(!showGoogleBuildings); if (!showGoogleBuildings) setShowOSMBuildings(false); }} className={`p-1.5 rounded ${showGoogleBuildings ? 'bg-[#1CABE2]/20 text-[#003E5E]' : 'hover:bg-gray-100 text-gray-700'}`} title="Google Buildings (Production Only)"><Box className="w-4 h-4" /></button>
-                    </div>
+                <div className="absolute top-4 right-4 bg-white rounded-lg shadow-md border border-gray-200 p-2 flex flex-col gap-2 z-[400]">
+                    {/* Google Buildings Toggle */}
+                    <button
+                        onClick={() => {
+                            console.log('Toggling Google Buildings');
+                            setShowGoogleBuildings(!showGoogleBuildings);
+                        }}
+                        className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showGoogleBuildings ? 'bg-[#1CABE2] text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+                    >
+                        <Box className="w-4 h-4" />
+                        <span className="text-xs font-semibold">Buildings</span>
+                    </button>
+
                     <div className="w-full h-px bg-gray-300"></div>
-                    <div className="flex gap-1">
-                        <button onClick={() => setMapStyle('street')} className={`p-1.5 rounded ${mapStyle === 'street' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Street View"><MapIcon className="w-4 h-4 text-gray-700" /></button>
-                        <button onClick={() => setMapStyle('satellite')} className={`p-1.5 rounded ${mapStyle === 'satellite' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Satellite View"><Layers className="w-4 h-4 text-gray-700" /></button>
-                        <button onClick={() => setMapStyle('hybrid')} className={`p-1.5 rounded ${mapStyle === 'hybrid' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Hybrid View"><Layers className="w-4 h-4 text-blue-600" /></button>
-                        <button onClick={() => setMapStyle('topo')} className={`p-1.5 rounded ${mapStyle === 'topo' ? 'bg-gray-200' : 'hover:bg-gray-100'}`} title="Terrain/Topography"><Mountain className="w-4 h-4 text-gray-700" /></button>
+
+                    {/* Map Style Buttons */}
+                    <div className="flex flex-col gap-1">
+                        <button
+                            onClick={() => setMapStyle('street')}
+                            className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${mapStyle === 'street' ? 'bg-blue-100 text-blue-700 shadow-sm' : 'hover:bg-gray-100 text-gray-700'}`}
+                        >
+                            <MapIcon className="w-4 h-4" />
+                            <span className="text-xs font-semibold">Street</span>
+                        </button>
+                        <button
+                            onClick={() => setMapStyle('satellite')}
+                            className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${mapStyle === 'satellite' ? 'bg-blue-100 text-blue-700 shadow-sm' : 'hover:bg-gray-100 text-gray-700'}`}
+                        >
+                            <Layers className="w-4 h-4" />
+                            <span className="text-xs font-semibold">Satellite</span>
+                        </button>
+                        <button
+                            onClick={() => setMapStyle('hybrid')}
+                            className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${mapStyle === 'hybrid' ? 'bg-blue-100 text-blue-700 shadow-sm' : 'hover:bg-gray-100 text-gray-700'}`}
+                        >
+                            <Layers className="w-4 h-4" />
+                            <span className="text-xs font-semibold">Hybrid</span>
+                        </button>
+                        <button
+                            onClick={() => setMapStyle('topo')}
+                            className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${mapStyle === 'topo' ? 'bg-blue-100 text-blue-700 shadow-sm' : 'hover:bg-gray-100 text-gray-700'}`}
+                        >
+                            <Mountain className="w-4 h-4" />
+                            <span className="text-xs font-semibold">Terrain</span>
+                        </button>
                     </div>
                 </div>
 
