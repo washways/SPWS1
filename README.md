@@ -37,10 +37,17 @@ The dashboard and feedback features rely on a Google Apps Script Web App.
 
 ## Google Earth Engine (GEE) Layers
 
-The "Depth to Water", "GW Potential", and "FABDEM" layers require Google Earth Engine authentication. 
+The app now supports displaying "Depth to Water", "Groundwater Potential", and "FABDEM" using a local Node.js backend proxy.
 
-1.  **Requirement**: A Google Cloud Project with the Earth Engine API enabled.
-2.  **Implementation**: 
-    *   The current app provides the UI toggles.
-    *   To make them functional, you must serve tile URLs from a backend (e.g., Python/Flask or Node.js) that authenticates with GEE using a Service Account.
-    *   Alternatively, open the browser console to see the `getMapId` request logs when toggling layers.
+**Requirements to Enable:**
+1.  **Dependencies**: Run `npm install` to install `@google/earthengine`.
+2.  **Service Account Key**:
+    *   Create a Service Account in your Google Cloud Project.
+    *   Grant it "Earth Engine Resource Viewer" role (or owner).
+    *   Download the JSON key file.
+    *   Rename it to `gee-key.json` and place it in the root folder of this project.
+3.  **Start Server**: Run `npm run dev:full` (or just `node server.js` in a separate terminal) to start the backend at `http://localhost:3001`.
+
+**Troubleshooting:**
+*   If you see "GEE Authentication Missing", check that `gee-key.json` exists in the root.
+*   Check the server console for "✅ Google Earth Engine Initialized".

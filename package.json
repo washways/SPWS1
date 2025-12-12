@@ -22,7 +22,8 @@
     "protomaps-leaflet": "^5.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "recharts": "^2.12.0"
+    "recharts": "^2.12.0",
+    "@google/earthengine": "^0.1.400"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.8",

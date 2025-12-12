@@ -139,6 +139,90 @@ app.get('/api/get_stats', async (req, res) => {
     }
 });
 
+// --- GEE INTEGRATION ---
+import ee from '@google/earthengine';
+
+const KEY_FILE = path.join(__dirname, 'gee-key.json');
+let geeInitialized = false;
+
+async function initGEE() {
+    try {
+        // Check for Service Account Key
+        try {
+            await fs.access(KEY_FILE);
+        } catch {
+            console.warn('⚠️ GEE Key not found (gee-key.json). Geo-layers will not work.');
+            return;
+        }
+
+        const privateKey = JSON.parse(await fs.readFile(KEY_FILE, 'utf8'));
+
+        console.log('Authenticating with Google Earth Engine...');
+        await new Promise((resolve, reject) => {
+            ee.data.authenticateViaPrivateKey(privateKey, () => {
+                ee.initialize(null, null, () => {
+                    geeInitialized = true;
+                    console.log('✅ Google Earth Engine Initialized');
+                    resolve();
+                }, (e) => reject(e));
+            }, (e) => reject(e));
+        });
+
+    } catch (error) {
+        console.error('❌ GEE Init Failed:', error);
+    }
+}
+
+// Call init
+initGEE();
+
+// GEE Layer Endpoint
+app.get('/api/get_gee_layer', async (req, res) => {
+    if (!geeInitialized) {
+        return res.status(503).json({ error: 'GEE not initialized. Backend missing gee-key.json.' });
+    }
+
+    const { type } = req.query; // dtw, gw, dem
+
+    try {
+        let image;
+        let vizParams;
+
+        // Use Malawi Geometry for clipping if possible, but here we just grab the asset
+        if (type === 'dtw') {
+            image = ee.Image('users/washways/DTW_estimated_depth_Malawi_v1_py').select(0);
+            vizParams = {
+                min: 5, max: 95,
+                palette: ['#0015ff', '#00a4ff', '#00fff0', '#00ff00', '#ccff00', '#ff8800', '#ff0000']
+            };
+        } else if (type === 'gw') {
+            image = ee.Image('users/washways/GW_Potential_Malawi_v1_py').select(0);
+            vizParams = {
+                min: 5, max: 95,
+                palette: ['#8b0000', '#ff4500', '#ffd700', '#7fff00', '#006400']
+            };
+        } else if (type === 'dem') {
+            image = ee.Image('projects/sat-io/open-datasets/FABDEM');
+            vizParams = {
+                min: 300, max: 2000,
+                palette: ['#081d58', '#253494', '#225ea8', '#1d91c0', '#41b6c4', '#7fcdbb', '#c7e9b4', '#edf8b1']
+            };
+        } else {
+            return res.status(400).json({ error: 'Unknown layer type' });
+        }
+
+        const mapId = await new Promise((resolve, reject) => {
+            image.getMap(vizParams, (mapId) => resolve(mapId));
+        });
+
+        res.json({ success: true, urlFormat: mapId.urlFormat });
+
+    } catch (e) {
+        console.error('GEE Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
