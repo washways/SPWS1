@@ -37,17 +37,18 @@ The dashboard and feedback features rely on a Google Apps Script Web App.
 
 ## Google Earth Engine (GEE) Layers
 
-The app now supports displaying "Depth to Water", "Groundwater Potential", and "FABDEM" using a local Node.js backend proxy.
+The app supports displaying GEE layers (Depth to Water, Groundwater, FABDEM) using **Client-Side Authentication**.
 
-**Requirements to Enable:**
-1.  **Dependencies**: Run `npm install` to install `@google/earthengine`.
-2.  **Service Account Key**:
-    *   Create a Service Account in your Google Cloud Project.
-    *   Grant it "Earth Engine Resource Viewer" role (or owner).
-    *   Download the JSON key file.
-    *   Rename it to `gee-key.json` and place it in the root folder of this project.
-3.  **Start Server**: Run `npm run dev:full` (or just `node server.js` in a separate terminal) to start the backend at `http://localhost:3001`.
+**One-Time Setup (Required for GitHub Pages):**
+1.  **Get Client ID**: Create a **Google Cloud OAuth Client ID** (Application Type: Web Application).
+    *   Add your GitHub Pages URL (and `http://localhost:5173`) to "Authorized JavaScript Origins".
+2.  **Configuration**:
+    *   Open `components/SiteMap.tsx`.
+    *   Paste your Client ID into the `GEE_CLIENT_ID` variable at the top of the file:
+        ```typescript
+        const GEE_CLIENT_ID = "YOUR_CLIENT_ID_HERE";
+        ```
+    *   Run `npm run build` and deploy.
+    *   **Security Note**: It is safe to commit this Client ID to a public repo *IF* you have restricted the "Authorized JavaScript Origins" in the Google Cloud Console to *only* your trusted domains (e.g., your GitHub Pages URL).
 
-**Troubleshooting:**
-*   If you see "GEE Authentication Missing", check that `gee-key.json` exists in the root.
-*   Check the server console for "✅ Google Earth Engine Initialized".
+**Alternative**: Leave the variable empty. You will be prompted to paste the ID every time you toggle a layer (useful for testing without editing code).

@@ -145,6 +145,8 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     useEffect(() => {
         if (!mapInstanceRef.current) return;
 
+        const GEE_CLIENT_ID = ""; // TODO: Paste your Google Could OAuth Client ID here (e.g. "123456...apps.googleusercontent.com")
+
         const handleGEELayer = async (show: boolean, type: 'dtw' | 'gw' | 'dem', name: string) => {
             if (show) {
                 if (!geeLayersRef.current[type]) {
@@ -181,9 +183,11 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     };
 
                     // Check if initialized
-                    if (!ee.data.getAuthToken()) {
-                        // Prompt User for Auth
-                        const clientId = prompt("Please enter your Google Cloud OAuth Client ID to enable GEE Layers:\n(Required for static site hosting)");
+                    if (ee.data.getAuthToken()) {
+                        runGEE();
+                    } else {
+                        const clientId = GEE_CLIENT_ID || prompt("Please enter your Google Cloud OAuth Client ID to enable GEE Layers:\n(Required for static site hosting)");
+
                         if (!clientId) {
                             if (type === 'dtw') setShowDTW(false);
                             if (type === 'gw') setShowGWPotential(false);
@@ -193,13 +197,17 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
                         ee.data.authenticateViaOauth(clientId, () => {
                             ee.initialize(null, null, runGEE, (e: any) => alert("GEE Init Failed: " + e));
-                        }, (e: any) => alert("Auth Failed: " + e), null, () => {
+                        }, (e: any) => {
+                            console.error("Auth Failed", e);
+                            alert("Auth Failed. Check console.");
+                            if (type === 'dtw') setShowDTW(false);
+                            if (type === 'gw') setShowGWPotential(false);
+                            if (type === 'dem') setShowFABDEM(false);
+                        }, null, () => {
                             ee.data.authenticateViaPopup(() => {
                                 ee.initialize(null, null, runGEE);
                             });
                         });
-                    } else {
-                        runGEE();
                     }
                 }
             } else {
