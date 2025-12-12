@@ -34,3 +34,13 @@ The dashboard and feedback features rely on a Google Apps Script Web App.
 4.  **Update URL**: Copy the Web App URL and update `GOOGLE_SCRIPT_URL` in `services/analyticsService.ts`.
 
 **Note**: Without this backend, the dashboard will show empty stats and feedback will not be saved.
+
+## Google Earth Engine (GEE) Layers
+
+The "Depth to Water", "GW Potential", and "FABDEM" layers require Google Earth Engine authentication. 
+
+1.  **Requirement**: A Google Cloud Project with the Earth Engine API enabled.
+2.  **Implementation**: 
+    *   The current app provides the UI toggles.
+    *   To make them functional, you must serve tile URLs from a backend (e.g., Python/Flask or Node.js) that authenticates with GEE using a Service Account.
+    *   Alternatively, open the browser console to see the `getMapId` request logs when toggling layers.

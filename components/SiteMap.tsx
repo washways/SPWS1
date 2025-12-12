@@ -101,6 +101,12 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     const [currentSegment, setCurrentSegment] = useState<L.LatLng[]>([]);
     const currentSegmentRef = useRef<L.LatLng[]>([]); // Ref for event listeners
 
+    // GEE Layers State
+    const [showDTW, setShowDTW] = useState(false);
+    const [showGWPotential, setShowGWPotential] = useState(false);
+    const [showFABDEM, setShowFABDEM] = useState(false);
+    const geeLayersRef = useRef<{ dtw: any, gw: any, dem: any }>({ dtw: null, gw: null, dem: null });
+
     const [loadingElevation, setLoadingElevation] = useState(false);
     const [counts, setCounts] = useState({ taps: 0, mainLen: 0, risingLen: 0, distLen: 0, hasBh: false, hasTank: false, schools: 0, clinics: 0, gardens: 0, hasGrid: false });
 
@@ -134,6 +140,49 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     useEffect(() => { currentSegmentRef.current = currentSegment; }, [currentSegment]);
     const selectedCountryRef = useRef(selectedCountry);
     useEffect(() => { selectedCountryRef.current = selectedCountry; }, [selectedCountry]);
+
+    // GEE Layers Effect (Placeholder/Stub for User Implementation)
+    useEffect(() => {
+        if (!mapInstanceRef.current) return;
+
+        const handleGEELayer = (show: boolean, type: 'dtw' | 'gw' | 'dem', name: string) => {
+            if (show) {
+                // Check if layer exists
+                if (!geeLayersRef.current[type]) {
+                    // This is where we would call GEE getMapId()
+                    console.log(`Requested GEE Layer: ${name}`);
+
+                    // MOCK IMPLEMENTATION / EXPLANATION
+                    // Since we cannot auth client-side easily without user action, we alert.
+                    // But if the user HAD the tile URL (e.g. from a public Map ID or Proxy), we would load it here.
+
+                    // For demo purposes, we will try to load a placeholder or just alert
+                    const isLocalHost = window.location.hostname === 'localhost';
+                    if (isLocalHost) {
+                        // We can try to use a proxy if setup, but likely not.
+                        alert(`To view ${name} (GEE Layer), you need to configure Google Earth Engine authentication. \n\nSee README for instructions on setting up GEE.`);
+                    } else {
+                        alert(`${name} requires a backend GEE proxy to sign requests. This feature is currently a placeholder.`);
+                    }
+
+                    // Turn it off to avoid confusion
+                    if (type === 'dtw') setShowDTW(false);
+                    if (type === 'gw') setShowGWPotential(false);
+                    if (type === 'dem') setShowFABDEM(false);
+                }
+            } else {
+                if (geeLayersRef.current[type]) {
+                    mapInstanceRef.current?.removeLayer(geeLayersRef.current[type]);
+                    geeLayersRef.current[type] = null;
+                }
+            }
+        };
+
+        handleGEELayer(showDTW, 'dtw', 'Depth to Water');
+        handleGEELayer(showGWPotential, 'gw', 'Groundwater Potential');
+        handleGEELayer(showFABDEM, 'dem', 'FABDEM Elevation');
+
+    }, [showDTW, showGWPotential, showFABDEM]);
 
     // -- Icons --
     const icons = useRef({
@@ -1243,6 +1292,31 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     </button>
 
                     <div className="w-full h-px bg-gray-300"></div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1 mb-1">GEE Layers</div>
+
+                    <button
+                        onClick={() => setShowDTW(!showDTW)}
+                        className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showDTW ? 'bg-indigo-500 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+                    >
+                        <Droplets className="w-4 h-4" />
+                        <span className="text-xs font-semibold">Depth to Water</span>
+                    </button>
+                    <button
+                        onClick={() => setShowGWPotential(!showGWPotential)}
+                        className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showGWPotential ? 'bg-indigo-500 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+                    >
+                        <CircleDot className="w-4 h-4" />
+                        <span className="text-xs font-semibold">GW Potential</span>
+                    </button>
+                    <button
+                        onClick={() => setShowFABDEM(!showFABDEM)}
+                        className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showFABDEM ? 'bg-indigo-500 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+                    >
+                        <Mountain className="w-4 h-4" />
+                        <span className="text-xs font-semibold">FABDEM</span>
+                    </button>
+
+                    <div className="w-full h-px bg-gray-300 mt-2"></div>
 
                     {/* Map Style Buttons */}
                     <div className="flex flex-col gap-1">
