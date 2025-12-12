@@ -1150,10 +1150,19 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 console.log('No building layer available for unserved analysis');
             }
         } else {
-            // Buffers are now drawn by the immediate buffer effect above
-            // This section only handles building analysis for population calculation
-
-
+            // Draw Visual Buffers for Point Features
+            if (visualBufferLayerRef.current) {
+                pointFeatures.forEach(pt => {
+                    L.circle(pt, {
+                        radius: bufferDistance,
+                        color: '#22c55e',
+                        fillColor: '#22c55e',
+                        fillOpacity: 0.1,
+                        weight: 1,
+                        dashArray: '5, 5'
+                    }).addTo(visualBufferLayerRef.current!);
+                });
+            }
 
             // Determine which building layer to use
             const activeBuildingLayer = showGoogleBuildings && googleBuildingLayerRef.current ? googleBuildingLayerRef.current : osmBuildingLayerRef.current;
