@@ -2,6 +2,8 @@
 import { DashboardStats, ReportLog } from "../types";
 
 const SESSION_START_KEY = "mw_tool_session_start";
+// Google Apps Script Web App URL
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwwGx6bFqF39NFT5_uFNRumh02righDBnHrmoy0nXI87RjhyCka9sBqAOFGVczZr1Ua3w/exec';
 
 export const AnalyticsService = {
 
@@ -17,91 +19,90 @@ export const AnalyticsService = {
     return Math.round(diff / 1000); // Seconds
   },
 
-  // 2. Log Generation (Send to Express Backend)
+  // 2. Log Generation (Send to Google Script)
   logReport: async (logData: Omit<ReportLog, 'id' | 'timestamp' | 'timeSpentSeconds'>) => {
     try {
       const payload = {
+        action: 'log_report',
         ...logData,
         timeSpentSeconds: AnalyticsService.getSessionDuration()
       };
 
-      const response = await fetch('https://script.google.com/macros/s/AKfycbwwGx6bFqF39NFT5_uFNRumh02righDBnHrmoy0nXI87RjhyCka9sBqAOFGVczZr1Ua3w/exec', {
+      // Send to Google Script
+      // mode: 'no-cors' is often required for Google Scripts to avoid CORS errors on simple writes,
+      // but it prevents reading the response.
+      await fetch(GOOGLE_SCRIPT_URL, {
         method: 'POST',
+        mode: 'no-cors',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-
-      console.log("Analytics: Report logged to server");
+      console.log("Analytics: Report sent to Google Script");
     } catch (e) {
-      // Graceful degradation - don't block the user if analytics fails
-      console.warn("Analytics: Failed to log report (Server might be offline)", e);
+      console.warn("Analytics: Failed to log report", e);
     }
   },
 
   // 3. Feedback Submission
   sendFeedback: async (message: string) => {
     try {
-      // Use the same Google Apps Script URL for feedback, but with a different action or payload structure if supported.
-      // For now, we'll assume the script handles a generic payload or we just log it.
-      // If the script only supports the report format, we might need to adjust.
-      // Let's try sending it as a "feedback" type report if possible, or just log to console for now 
-      // since we don't have a dedicated feedback endpoint in the script confirmed.
-      // However, to prevent errors, we will simulate success.
+      const payload = {
+        action: 'feedback',
+        message: message,
+        timestamp: new Date().toISOString()
+      };
 
-      console.log("Feedback submitted (Serverless):", message);
-
-      // OPTIONAL: If the Google Script supports a 'type' field, we could send it there.
-      // For now, we'll just resolve successfully to improve UX.
-      return;
-
-      /* 
-      // Original Backend Call
-      const response = await fetch('http://localhost:3001/api/feedback', {
+      await fetch(GOOGLE_SCRIPT_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
       });
-      if (!response.ok) throw new Error('Failed to send feedback');
-      */
+
+      console.log("Feedback sent to Google Script");
     } catch (e) {
       console.error("Feedback error", e);
       throw e;
     }
   },
 
-  // 4. Analytics Retrieval (Get from Express Backend)
+  // 4. Analytics Retrieval
   getDashboardStats: async (): Promise<DashboardStats> => {
     try {
-      // Serverless Mode: We cannot easily fetch global stats without a dedicated backend or a read-enabled Google Sheet API.
-      // For GitHub Pages, we will return empty/mock stats to prevent errors.
+      console.log("Fetching stats from Google Script...");
 
-      console.log("Analytics: Serverless mode - returning local/empty stats");
+      // Note: For this to work, the Google Script must:
+      // 1. Implement doGet()
+      // 2. Return JSON content using ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON)
+      // 3. Be deployed as "Who can access: Anyone" (or user must be logged in)
+      // 4. Handle CORS (Google Scripts usually handle this automatically if returning JSON correctly)
 
-      return {
-        totalReports: 0,
-        totalPopulationServed: 0,
-        totalCapexEstimated: 0,
-        avgTimeSpentSeconds: 0,
-        solarWinRate: 0,
-        recentLogs: []
-      };
+      const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=get_stats`);
 
-      /*
-      // Original Backend Call
-      const response = await fetch('http://localhost:3001/api/get_stats');
-      if (!response.ok) throw new Error('Failed to fetch stats');
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status} ${response.statusText}`);
+      }
 
-      const rawLogs: any[] = await response.json();
-      // ... mapping logic ...
-      */
+      const data = await response.json();
+      console.log("Stats received:", data);
+
+      // Validate data structure roughly
+      if (data && typeof data === 'object' && 'totalReports' in data) {
+        return data as DashboardStats;
+      } else {
+        console.warn("Received data but it doesn't match DashboardStats interface:", data);
+        throw new Error("Invalid data format from script");
+      }
+
     } catch (e) {
-      console.warn("Error loading stats (Serverless fallback):", e);
+      console.warn("Error loading stats from Google Script (Falling back to empty stats):", e);
+
+      // Fallback to empty stats so the dashboard works even if script fails
       return {
         totalReports: 0,
         totalPopulationServed: 0,

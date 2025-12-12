@@ -94,7 +94,7 @@ export const useProjectState = () => {
             setFeedbackText("");
             setShowFeedback(false);
         } catch (e) {
-            alert("Error sending feedback. Please check if the backend is running.");
+            alert("Error sending feedback. Please check your internet connection.");
         } finally {
             setIsSubmittingFeedback(false);
         }
