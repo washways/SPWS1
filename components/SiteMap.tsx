@@ -187,9 +187,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 console.log('[DEBUG] Image Height/Width:', georaster.height, georaster.width);
                                 console.log('[DEBUG] Proj4 Defs:', (proj4 as any).defs('EPSG:4326'), (proj4 as any).defs('EPSG:3857'));
 
-                                // Explicitly check validity
-                                if (!georaster.projection) {
-                                    console.warn('[DEBUG] No projection found in GeoTIFF. Assuming EPSG:4326');
+                                // Explicitly check validity or weird GEE codes
+                                if (!georaster.projection || georaster.projection === 32767) {
+                                    console.warn(`[DEBUG] Handling weird projection code ${georaster.projection}. Forcing EPSG:4326`);
                                     georaster.projection = 4326;
                                 }
 
