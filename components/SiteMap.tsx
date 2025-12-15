@@ -185,7 +185,15 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 console.log(`[DEBUG] Loaded part ${i} of ${name}`);
                                 console.log('[DEBUG] Georaster Projection:', georaster.projection);
                                 console.log('[DEBUG] Image Height/Width:', georaster.height, georaster.width);
-                                console.log('[DEBUG] Proj4 Defs:', (proj4 as any).defs('EPSG:4326'), (proj4 as any).defs('EPSG:3857'));
+                                console.log('[DEBUG] Bounds:', georaster.xmin, georaster.ymin, georaster.xmax, georaster.ymax);
+
+                                // Test Proj4 Manually
+                                try {
+                                    const testPt = (proj4 as any)('EPSG:4326', 'EPSG:3857', [34.0, -13.0]);
+                                    console.log('[DEBUG] Manual Proj4 Test (MWI):', testPt);
+                                } catch (err) {
+                                    console.error('[DEBUG] Manual Proj4 Test FAILED:', err);
+                                }
 
                                 // Explicitly check validity or weird GEE codes
                                 if (!georaster.projection || georaster.projection === 32767) {
@@ -212,7 +220,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 const layer = new GeoRasterLayer({
                                     georaster: georaster,
                                     opacity: 0.7,
-                                    proj4: proj4,
+                                    // proj4: proj4, // Rely on window.proj4 to be safe
                                     pixelValuesToColorFn: (values: any) => {
                                         const v = values[0];
                                         if (v === -9999 || v === null || isNaN(v)) return null;
