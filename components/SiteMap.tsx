@@ -160,6 +160,8 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                         // Add definitions for common projections just in case
                         proj4.defs("EPSG:4326", "+proj=longlat +datum=WGS84 +no_defs");
                         proj4.defs("EPSG:3857", "+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs");
+                        // 32767 is often used as "User Defined" by GEE/GDAL, essentially WGS84
+                        proj4.defs("EPSG:32767", "+proj=longlat +datum=WGS84 +no_defs");
 
                         // @ts-ignore
                         const parse_georaster = (await import('georaster')).default;
