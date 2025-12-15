@@ -145,7 +145,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     useEffect(() => {
         if (!mapInstanceRef.current) return;
 
-        const GEE_CLIENT_ID = ""; // TODO: Paste your Google Could OAuth Client ID here (e.g. "123456...apps.googleusercontent.com")
+        const GEE_CLIENT_ID = "728255231359-v6ujpg2dgabdjl9h13bh2sihmokc5ui9.apps.googleusercontent.com"; // TODO: Paste your Google Could OAuth Client ID here (e.g. "123456...apps.googleusercontent.com")
 
         const handleGEELayer = async (show: boolean, type: 'dtw' | 'gw' | 'dem', name: string) => {
             if (show) {
