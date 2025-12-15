@@ -141,6 +141,71 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     const selectedCountryRef = useRef(selectedCountry);
     useEffect(() => { selectedCountryRef.current = selectedCountry; }, [selectedCountry]);
 
+    // Visualization Params Ref (Dynamic Contrast)
+    const visParamsRef = useRef({
+        dtw: { min: 0, max: 60, palette: ['#0015ff', '#00a4ff', '#00fff0', '#00ff00', '#ccff00', '#ff8800', '#ff0000'] },
+        gw: { min: 0, max: 100, palette: ['#8b0000', '#ff4500', '#ffd700', '#7fff00', '#006400'] },
+        dem: { min: 500, max: 2000, palette: ['#000000', '#ffffff'] }
+    });
+
+    // Auto-Contrast Handler
+    const handleAutoContrast = () => {
+        const activeType = showDTW ? 'dtw' : showGWPotential ? 'gw' : showFABDEM ? 'dem' : null;
+        if (!activeType || !geeLayersRef.current[activeType as 'dtw' | 'gw' | 'dem']) {
+            alert("Please turn on a layer first!");
+            return;
+        }
+
+        const type = activeType as 'dtw' | 'gw' | 'dem';
+        const layerGroup = geeLayersRef.current[type];
+        const values: number[] = [];
+
+        console.log(`[Auto-Contrast] Calculating stats for ${type}...`);
+
+        // Sample pixel values from all loaded tiles
+        layerGroup.eachLayer((layer: any) => {
+            if (layer.georaster && layer.georaster.values) {
+                try {
+                    const band0 = layer.georaster.values[0];
+                    // Sample every 10th pixel for performance
+                    for (let r = 0; r < layer.georaster.height; r += 10) {
+                        for (let c = 0; c < layer.georaster.width; c += 10) {
+                            const v = band0[r][c];
+                            if (v > -9999 && !isNaN(v)) values.push(v);
+                        }
+                    }
+                } catch (e) {
+                    console.warn("Error sampling raster", e);
+                }
+            }
+        });
+
+        if (values.length === 0) {
+            console.warn("No values found to stretch.");
+            alert("No data to analyze. Make sure the layer is fully loaded.");
+            return;
+        }
+
+        // Calculate 2nd and 98th percentiles for robust stretching
+        values.sort((a, b) => a - b);
+        const p2 = values[Math.floor(values.length * 0.02)];
+        const p98 = values[Math.floor(values.length * 0.98)];
+
+        console.log(`[Auto-Contrast] New Min: ${p2.toFixed(2)}, Max: ${p98.toFixed(2)}`);
+
+        // Update visualization parameters
+        visParamsRef.current[type].min = p2;
+        visParamsRef.current[type].max = p98;
+
+        // Force layer redraw
+        layerGroup.eachLayer((layer: any) => {
+            if (layer.redraw) layer.redraw();
+        });
+
+        alert(`Contrast adjusted!\nMin: ${p2.toFixed(2)}\nMax: ${p98.toFixed(2)}`);
+    };
+
+
     // GEE Layers Effect (Replaced with COG/GeoTIFF)
     useEffect(() => {
         if (!mapInstanceRef.current) return;
@@ -198,33 +263,20 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 // Explicitly check validity or weird GEE codes
                                 // The bounds (3 million+) confirm this is EPSG:3857 (Web Mercator), not 4326
                                 if (!georaster.projection || georaster.projection === 32767) {
-                                    console.warn(`[DEBUG] Handling weird projection code ${georaster.projection}. Bounds look like Mercator. Forcing EPSG:3857`);
                                     georaster.projection = 3857;
                                 }
-
-                                let min = 0; let max = 100;
-                                let palette = ['blue', 'cyan', 'green', 'yellow', 'red'];
-
-                                if (type === 'dtw') {
-                                    min = 0; max = 60;
-                                    palette = ['#0015ff', '#00a4ff', '#00fff0', '#00ff00', '#ccff00', '#ff8800', '#ff0000'];
-                                } else if (type === 'gw') {
-                                    min = 0; max = 100;
-                                    palette = ['#8b0000', '#ff4500', '#ffd700', '#7fff00', '#006400'];
-                                } else {
-                                    min = 500; max = 2000;
-                                    palette = ['#000000', '#ffffff'];
-                                }
-
-                                const scale = chroma.scale(palette).domain([min, max]);
 
                                 const layer = new GeoRasterLayer({
                                     georaster: georaster,
                                     opacity: 0.7,
-                                    // proj4: proj4, // Rely on window.proj4 to be safe
                                     pixelValuesToColorFn: (values: any) => {
                                         const v = values[0];
                                         if (v === -9999 || v === null || isNaN(v)) return null;
+
+                                        // Use dynamic parameters from visParamsRef
+                                        const { min, max, palette } = visParamsRef.current[type];
+                                        const chroma = require('chroma-js');
+                                        const scale = chroma.scale(palette).domain([min, max]);
                                         return scale(v).hex();
                                     },
                                     resolution: 64,
@@ -1395,6 +1447,28 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     >
                         <Mountain className="w-4 h-4" />
                         <span className="text-xs font-semibold">FABDEM</span>
+                    </button>
+
+                    <div className="w-full h-px bg-gray-300 mt-2"></div>
+
+                    <button
+                        onClick={handleAutoContrast}
+                        className="px-3 py-2 rounded-lg flex items-center gap-2 bg-slate-800 text-white shadow-md hover:bg-slate-700 transition-all mt-2"
+                        title="Adjust contrast based on current view"
+                    >
+                        <Activity className="w-4 h-4" />
+                        <span className="text-xs font-semibold">Auto Contrast</span>
+                    </button>
+
+                    <div className="w-full h-px bg-gray-300 mt-2"></div>
+
+                    <button
+                        onClick={handleAutoContrast}
+                        className="px-3 py-2 rounded-lg flex items-center gap-2 bg-slate-800 text-white shadow-md hover:bg-slate-700 transition-all mt-2"
+                        title="Adjust contrast based on current view"
+                    >
+                        <Activity className="w-4 h-4" />
+                        <span className="text-xs font-semibold">Auto Contrast</span>
                     </button>
 
                     <div className="w-full h-px bg-gray-300 mt-2"></div>
