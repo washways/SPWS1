@@ -155,14 +155,18 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
                     try {
                         // @ts-ignore
+                        const proj4 = (await import('proj4')).default;
+                        (window as any).proj4 = proj4;
+                        // Add definitions for common projections just in case
+                        proj4.defs("EPSG:4326", "+proj=longlat +datum=WGS84 +no_defs");
+                        proj4.defs("EPSG:3857", "+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs");
+
+                        // @ts-ignore
                         const parse_georaster = (await import('georaster')).default;
                         // @ts-ignore
                         const GeoRasterLayer = (await import('georaster-layer-for-leaflet')).default;
                         // @ts-ignore
                         const chroma = (await import('chroma-js')).default;
-                        // @ts-ignore
-                        const proj4 = (await import('proj4')).default;
-                        (window as any).proj4 = proj4;
 
                         const baseName = type === 'dtw' ? 'dtw_raw'
                             : type === 'gw' ? 'gw_raw'
