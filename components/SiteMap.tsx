@@ -141,73 +141,76 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     const selectedCountryRef = useRef(selectedCountry);
     useEffect(() => { selectedCountryRef.current = selectedCountry; }, [selectedCountry]);
 
-    // GEE Layers Effect
+    // GEE Layers Effect (Replaced with COG/GeoTIFF)
     useEffect(() => {
         if (!mapInstanceRef.current) return;
 
-        const GEE_CLIENT_ID = "728255231359-v6ujpg2dgabdjl9h13bh2sihmokc5ui9.apps.googleusercontent.com"; // TODO: Paste your Google Could OAuth Client ID here (e.g. "123456...apps.googleusercontent.com")
-
-        const handleGEELayer = async (show: boolean, type: 'dtw' | 'gw' | 'dem', name: string) => {
+        const handleCOGLayer = async (show: boolean, type: 'dtw' | 'gw' | 'dem', name: string) => {
             if (show) {
                 if (!geeLayersRef.current[type]) {
-                    console.log(`Requested GEE Layer: ${name}`);
-                    const ee = (window as any).ee;
+                    console.log(`Loading COG Layer: ${name}`);
 
-                    if (!ee) {
-                        alert("Google Earth Engine API not loaded. Application might need restart or internet connection.");
-                        return;
-                    }
+                    try {
+                        // Dynamic Import to avoid SSR/Build issues if packages missing
+                        // @ts-ignore
+                        const parse_georaster = (await import('georaster')).default;
+                        // @ts-ignore
+                        const GeoRasterLayer = (await import('georaster-layer-for-leaflet')).default;
+                        // @ts-ignore
+                        const chroma = (await import('chroma-js')).default;
 
-                    // Client-Side Auth Flow
-                    const runGEE = () => {
-                        let image: any;
-                        let vizParams: any = {};
+                        const url = type === 'dtw' ? '/maps/dtw_raw.tif'
+                            : type === 'gw' ? '/maps/gw_raw.tif'
+                                : '/maps/elevation_raw.tif';
+
+                        // Fetch the file
+                        const response = await fetch(url);
+                        if (!response.ok) throw new Error(`Failed to fetch ${url}`);
+                        const arrayBuffer = await response.arrayBuffer();
+                        const georaster = await parse_georaster(arrayBuffer);
+
+                        // Simple Min/Max Estimate (for initial load)
+                        // In a real "dynamic" app, we would calculate this from the viewport
+                        let min = 0;
+                        let max = 100;
+                        let palette = ['blue', 'cyan', 'green', 'yellow', 'red'];
 
                         if (type === 'dtw') {
-                            image = ee.Image('users/washways/DTW_estimated_depth_Malawi_v1_py').select(0);
-                            vizParams = { min: 5, max: 95, palette: ['#0015ff', '#00a4ff', '#00fff0', '#00ff00', '#ccff00', '#ff8800', '#ff0000'] };
+                            min = 0; max = 60; // Depth typically 0-60m
+                            palette = ['#0015ff', '#00a4ff', '#00fff0', '#00ff00', '#ccff00', '#ff8800', '#ff0000'];
                         } else if (type === 'gw') {
-                            image = ee.Image('users/washways/GW_Potential_Malawi_v1_py').select(0);
-                            vizParams = { min: 5, max: 95, palette: ['#8b0000', '#ff4500', '#ffd700', '#7fff00', '#006400'] };
-                        } else if (type === 'dem') {
-                            image = ee.Image('projects/sat-io/open-datasets/FABDEM');
-                            vizParams = { min: 300, max: 2000, palette: ['#081d58', '#253494', '#225ea8', '#1d91c0', '#41b6c4', '#7fcdbb', '#c7e9b4', '#edf8b1'] };
+                            min = 0; max = 100;
+                            palette = ['#8b0000', '#ff4500', '#ffd700', '#7fff00', '#006400']; // Red=Bad, Green=Good
+                        } else {
+                            min = 500; max = 2000; // Elevation
+                            palette = ['#000000', '#ffffff']; // Simple grayscale
                         }
 
-                        image.getMap(vizParams, (mapId: any) => {
-                            const layer = L.tileLayer(mapId.urlFormat, {
-                                attribution: 'Google Earth Engine', opacity: 0.7
-                            }).addTo(mapInstanceRef.current!);
-                            geeLayersRef.current[type] = layer;
+                        const scale = chroma.scale(palette).domain([min, max]);
+
+                        const layer = new GeoRasterLayer({
+                            georaster: georaster,
+                            opacity: 0.7,
+                            pixelValuesToColorFn: (values: any) => {
+                                const v = values[0]; // Band 0
+                                if (v === -9999 || v === null || isNaN(v)) return null;
+                                return scale(v).hex();
+                            },
+                            resolution: 64, // Optimization: skip pixels for speed
+                            debugLevel: 0
                         });
-                    };
 
-                    // Check if initialized
-                    if (ee.data.getAuthToken()) {
-                        runGEE();
-                    } else {
-                        const clientId = GEE_CLIENT_ID || prompt("Please enter your Google Cloud OAuth Client ID to enable GEE Layers:\n(Required for static site hosting)");
+                        layer.addTo(mapInstanceRef.current!);
+                        geeLayersRef.current[type] = layer;
+                        console.log(`Loaded ${name}`);
 
-                        if (!clientId) {
-                            if (type === 'dtw') setShowDTW(false);
-                            if (type === 'gw') setShowGWPotential(false);
-                            if (type === 'dem') setShowFABDEM(false);
-                            return;
-                        }
-
-                        ee.data.authenticateViaOauth(clientId, () => {
-                            ee.initialize(null, null, runGEE, (e: any) => alert("GEE Init Failed: " + e));
-                        }, (e: any) => {
-                            console.error("Auth Failed", e);
-                            alert("Auth Failed. Check console.");
-                            if (type === 'dtw') setShowDTW(false);
-                            if (type === 'gw') setShowGWPotential(false);
-                            if (type === 'dem') setShowFABDEM(false);
-                        }, null, () => {
-                            ee.data.authenticateViaPopup(() => {
-                                ee.initialize(null, null, runGEE);
-                            });
-                        });
+                    } catch (e) {
+                        console.error(`Failed to load layer ${name}`, e);
+                        // Disable the toggle if it fails
+                        if (type === 'dtw') setShowDTW(false);
+                        if (type === 'gw') setShowGWPotential(false);
+                        if (type === 'dem') setShowFABDEM(false);
+                        alert(`Failed to load ${name}. Check /public/maps/ folder.`);
                     }
                 }
             } else {
@@ -218,10 +221,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             }
         };
 
-
-        handleGEELayer(showDTW, 'dtw', 'Depth to Water');
-        handleGEELayer(showGWPotential, 'gw', 'Groundwater Potential');
-        handleGEELayer(showFABDEM, 'dem', 'FABDEM Elevation');
+        handleCOGLayer(showDTW, 'dtw', 'Depth to Water');
+        handleCOGLayer(showGWPotential, 'gw', 'Groundwater Potential');
+        handleCOGLayer(showFABDEM, 'dem', 'Elevation');
 
     }, [showDTW, showGWPotential, showFABDEM]);
 

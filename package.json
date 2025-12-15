@@ -10,10 +10,15 @@
     "dev:full": "concurrently \"npm run dev\" \"npm run server\""
   },
   "dependencies": {
+    "@google/earthengine": "^0.1.400",
     "@turf/turf": "^7.1.0",
+    "@types/chroma-js": "^3.1.2",
+    "chroma-js": "^3.2.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "flatgeobuf": "^4.3.3",
+    "georaster": "^1.6.0",
+    "georaster-layer-for-leaflet": "^4.1.2",
     "html2pdf.js": "^0.10.1",
     "leaflet": "^1.9.4",
     "leaflet.vectorgrid": "^1.3.0",
@@ -22,8 +27,7 @@
     "protomaps-leaflet": "^5.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "recharts": "^2.12.0",
-    "@google/earthengine": "^0.1.400"
+    "recharts": "^2.12.0"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.8",
