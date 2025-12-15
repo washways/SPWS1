@@ -159,9 +159,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                         // @ts-ignore
                         const chroma = (await import('chroma-js')).default;
 
-                        const url = type === 'dtw' ? '/maps/dtw_raw.tif'
-                            : type === 'gw' ? '/maps/gw_raw.tif'
-                                : '/maps/elevation_raw.tif';
+                        const url = type === 'dtw' ? 'maps/dtw_raw.tif'
+                            : type === 'gw' ? 'maps/gw_raw.tif'
+                                : 'maps/elevation_raw.tif';
 
                         // Fetch the file
                         const response = await fetch(url);
