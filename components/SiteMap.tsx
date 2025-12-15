@@ -199,6 +199,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 const layer = new GeoRasterLayer({
                                     georaster: georaster,
                                     opacity: 0.7,
+                                    proj4: proj4,
                                     pixelValuesToColorFn: (values: any) => {
                                         const v = values[0];
                                         if (v === -9999 || v === null || isNaN(v)) return null;
