@@ -180,6 +180,17 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 const arrayBuffer = await response.arrayBuffer();
                                 const georaster = await parse_georaster(arrayBuffer);
 
+                                console.log(`[DEBUG] Loaded part ${i} of ${name}`);
+                                console.log('[DEBUG] Georaster Projection:', georaster.projection);
+                                console.log('[DEBUG] Image Height/Width:', georaster.height, georaster.width);
+                                console.log('[DEBUG] Proj4 Defs:', (proj4 as any).defs('EPSG:4326'), (proj4 as any).defs('EPSG:3857'));
+
+                                // Explicitly check validity
+                                if (!georaster.projection) {
+                                    console.warn('[DEBUG] No projection found in GeoTIFF. Assuming EPSG:4326');
+                                    georaster.projection = 4326;
+                                }
+
                                 let min = 0; let max = 100;
                                 let palette = ['blue', 'cyan', 'green', 'yellow', 'red'];
 
