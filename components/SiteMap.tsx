@@ -148,10 +148,12 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         const handleCOGLayer = async (show: boolean, type: 'dtw' | 'gw' | 'dem', name: string) => {
             if (show) {
                 if (!geeLayersRef.current[type]) {
-                    console.log(`Loading COG Layer: ${name}`);
+                    console.log(`Loading COG Layer: ${name} (Split View)`);
+
+                    const layerGroup = L.layerGroup().addTo(mapInstanceRef.current!);
+                    geeLayersRef.current[type] = layerGroup;
 
                     try {
-                        // Dynamic Import to avoid SSR/Build issues if packages missing
                         // @ts-ignore
                         const parse_georaster = (await import('georaster')).default;
                         // @ts-ignore
@@ -159,63 +161,60 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                         // @ts-ignore
                         const chroma = (await import('chroma-js')).default;
 
-                        const url = type === 'dtw' ? 'maps/dtw_raw.tif'
-                            : type === 'gw' ? 'maps/gw_raw.tif'
-                                : 'maps/elevation_raw.tif';
+                        const baseName = type === 'dtw' ? 'dtw_raw'
+                            : type === 'gw' ? 'gw_raw'
+                                : 'elevation_raw';
 
-                        // Fetch the file
-                        const response = await fetch(url);
-                        if (!response.ok) throw new Error(`Failed to fetch ${url}`);
-                        const arrayBuffer = await response.arrayBuffer();
-                        const georaster = await parse_georaster(arrayBuffer);
+                        for (let i = 1; i <= 4; i++) {
+                            const url = `maps/${baseName}_${i}.tif`;
 
-                        // Simple Min/Max Estimate (for initial load)
-                        // In a real "dynamic" app, we would calculate this from the viewport
-                        let min = 0;
-                        let max = 100;
-                        let palette = ['blue', 'cyan', 'green', 'yellow', 'red'];
+                            fetch(url).then(async (response) => {
+                                if (!response.ok) throw new Error(`Failed to fetch ${url}`);
+                                const arrayBuffer = await response.arrayBuffer();
+                                const georaster = await parse_georaster(arrayBuffer);
 
-                        if (type === 'dtw') {
-                            min = 0; max = 60; // Depth typically 0-60m
-                            palette = ['#0015ff', '#00a4ff', '#00fff0', '#00ff00', '#ccff00', '#ff8800', '#ff0000'];
-                        } else if (type === 'gw') {
-                            min = 0; max = 100;
-                            palette = ['#8b0000', '#ff4500', '#ffd700', '#7fff00', '#006400']; // Red=Bad, Green=Good
-                        } else {
-                            min = 500; max = 2000; // Elevation
-                            palette = ['#000000', '#ffffff']; // Simple grayscale
+                                let min = 0; let max = 100;
+                                let palette = ['blue', 'cyan', 'green', 'yellow', 'red'];
+
+                                if (type === 'dtw') {
+                                    min = 0; max = 60;
+                                    palette = ['#0015ff', '#00a4ff', '#00fff0', '#00ff00', '#ccff00', '#ff8800', '#ff0000'];
+                                } else if (type === 'gw') {
+                                    min = 0; max = 100;
+                                    palette = ['#8b0000', '#ff4500', '#ffd700', '#7fff00', '#006400'];
+                                } else {
+                                    min = 500; max = 2000;
+                                    palette = ['#000000', '#ffffff'];
+                                }
+
+                                const scale = chroma.scale(palette).domain([min, max]);
+
+                                const layer = new GeoRasterLayer({
+                                    georaster: georaster,
+                                    opacity: 0.7,
+                                    pixelValuesToColorFn: (values: any) => {
+                                        const v = values[0];
+                                        if (v === -9999 || v === null || isNaN(v)) return null;
+                                        return scale(v).hex();
+                                    },
+                                    resolution: 64,
+                                    debugLevel: 0
+                                });
+
+                                layer.addTo(layerGroup);
+                            }).catch(e => console.warn(`Skipping part ${i} of ${name}:`, e));
                         }
-
-                        const scale = chroma.scale(palette).domain([min, max]);
-
-                        const layer = new GeoRasterLayer({
-                            georaster: georaster,
-                            opacity: 0.7,
-                            pixelValuesToColorFn: (values: any) => {
-                                const v = values[0]; // Band 0
-                                if (v === -9999 || v === null || isNaN(v)) return null;
-                                return scale(v).hex();
-                            },
-                            resolution: 64, // Optimization: skip pixels for speed
-                            debugLevel: 0
-                        });
-
-                        layer.addTo(mapInstanceRef.current!);
-                        geeLayersRef.current[type] = layer;
-                        console.log(`Loaded ${name}`);
-
                     } catch (e) {
-                        console.error(`Failed to load layer ${name}`, e);
-                        // Disable the toggle if it fails
-                        if (type === 'dtw') setShowDTW(false);
-                        if (type === 'gw') setShowGWPotential(false);
-                        if (type === 'dem') setShowFABDEM(false);
-                        alert(`Failed to load ${name}. Check /public/maps/ folder.`);
+                        console.error(`Failed to init layer ${name}`, e);
+                        if (geeLayersRef.current[type]) {
+                            geeLayersRef.current[type].remove();
+                            geeLayersRef.current[type] = null;
+                        }
                     }
                 }
             } else {
                 if (geeLayersRef.current[type]) {
-                    mapInstanceRef.current?.removeLayer(geeLayersRef.current[type]);
+                    geeLayersRef.current[type].remove(); // This removes the LayerGroup
                     geeLayersRef.current[type] = null;
                 }
             }

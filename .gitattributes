@@ -1,1 +1,4 @@
-*.tif filter=lfs diff=lfs merge=lfs -text
+# Auto detected text files and binary files
+# language-specific
+*.ts linguist-language=TypeScript
+*.tsx linguist-language=TypeScript
