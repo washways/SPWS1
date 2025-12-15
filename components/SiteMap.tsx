@@ -160,6 +160,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                         const GeoRasterLayer = (await import('georaster-layer-for-leaflet')).default;
                         // @ts-ignore
                         const chroma = (await import('chroma-js')).default;
+                        // @ts-ignore
+                        const proj4 = (await import('proj4')).default;
+                        (window as any).proj4 = proj4;
 
                         const baseName = type === 'dtw' ? 'dtw_raw'
                             : type === 'gw' ? 'gw_raw'
