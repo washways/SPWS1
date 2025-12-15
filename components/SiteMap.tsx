@@ -275,7 +275,6 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
                                         // Use dynamic parameters from visParamsRef
                                         const { min, max, palette } = visParamsRef.current[type];
-                                        const chroma = require('chroma-js');
                                         const scale = chroma.scale(palette).domain([min, max]);
                                         return scale(v).hex();
                                     },
