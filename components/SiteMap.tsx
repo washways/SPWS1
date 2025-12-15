@@ -196,9 +196,10 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 }
 
                                 // Explicitly check validity or weird GEE codes
+                                // The bounds (3 million+) confirm this is EPSG:3857 (Web Mercator), not 4326
                                 if (!georaster.projection || georaster.projection === 32767) {
-                                    console.warn(`[DEBUG] Handling weird projection code ${georaster.projection}. Forcing EPSG:4326`);
-                                    georaster.projection = 4326;
+                                    console.warn(`[DEBUG] Handling weird projection code ${georaster.projection}. Bounds look like Mercator. Forcing EPSG:3857`);
+                                    georaster.projection = 3857;
                                 }
 
                                 let min = 0; let max = 100;
