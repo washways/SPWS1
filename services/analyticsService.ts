@@ -3,7 +3,7 @@ import { DashboardStats, ReportLog } from "../types";
 
 const SESSION_START_KEY = "mw_tool_session_start";
 // Google Apps Script Web App URL
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwwGx6bFqF39NFT5_uFNRumh02righDBnHrmoy0nXI87RjhyCka9sBqAOFGVczZr1Ua3w/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxBBsz1o4_VEwlLYlPmdbjigztqo3RLth0iNlr06eCcMTr3MJ-FPllw7zaf6ZoONXlN/exec';
 
 export const AnalyticsService = {
 
@@ -101,6 +101,7 @@ export const AnalyticsService = {
 
     } catch (e) {
       console.warn("Error loading stats from Google Script (Falling back to empty stats):", e);
+      console.error("CORS Error Detected? Please check 'GOOGLE_APPS_SCRIPT_SETUP.md' in your project root for deployment instructions.");
 
       // Fallback to empty stats so the dashboard works even if script fails
       return {
