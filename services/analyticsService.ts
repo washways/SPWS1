@@ -3,7 +3,7 @@ import { DashboardStats, ReportLog } from "../types";
 
 const SESSION_START_KEY = "mw_tool_session_start";
 // Google Apps Script Web App URL
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxBBsz1o4_VEwlLYlPmdbjigztqo3RLth0iNlr06eCcMTr3MJ-FPllw7zaf6ZoONXlN/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzAK788sWe3dBiiZhvDHlM-f21EnWHyEWc5lsBkur8G_vqcCaq5sArBaK3ky1FlKJon/exec';
 
 export const AnalyticsService = {
 
