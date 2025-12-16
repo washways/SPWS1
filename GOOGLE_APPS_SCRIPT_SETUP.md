@@ -145,3 +145,16 @@ function logData(sheetName, data) {
     ```typescript
     const GOOGLE_SCRIPT_URL = 'YOUR_NEW_COPIED_URL';
     ```
+
+## Troubleshooting: "Forbidden (403)" Error?
+If you see `403 Forbidden` in your console, it means the script is blocking you.
+This **ALWAYS** happens for one reason:
+
+*   **Who has access** was not set to **`Anyone`**.
+
+**To Fix:**
+1.  Go back to your script.
+2.  **Deploy > New deployment** (You MUST create a new one, editing does not work reliably).
+3.  Set **Who has access** to **`Anyone`**.
+4.  Click **Deploy**.
+5.  **Copy the NEW URL** (it changes every time!) and update line 6 in `services/analyticsService.ts`.

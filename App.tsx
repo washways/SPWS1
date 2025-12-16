@@ -277,7 +277,11 @@ const App: React.FC = () => {
                                 <div><h2 className="font-bold text-gray-900">Economic Analysis</h2><p className="text-sm text-gray-500">20-Year Lifecycle Cost Comparison</p></div>
                                 <div className="flex gap-2">
                                     <div className="px-3 py-1 bg-gray-100 rounded text-xs font-medium text-gray-600 flex items-center">Handpumps Needed: <strong className="ml-1 text-gray-900">{handpumpsNeeded}</strong></div>
-                                    <button onClick={() => generatePDF('report-content', `Feasibility_Report_${projectDetails.siteName || 'Site'}.pdf`)} disabled={isDownloadingPdf} className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-700 transition shadow-sm disabled:opacity-75">
+                                    <button onClick={() => {
+                                        const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+                                        const cleanName = (projectDetails.siteName || 'Site').replace(/[^a-z0-9]/gi, '_');
+                                        generatePDF('report-content', `Feasibility_Report_${cleanName}_${dateStr}.pdf`);
+                                    }} disabled={isDownloadingPdf} className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-700 transition shadow-sm disabled:opacity-75">
                                         {isDownloadingPdf ? <Activity className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                                         {isDownloadingPdf ? "Generating PDF..." : "Download Full Report"}
                                     </button>

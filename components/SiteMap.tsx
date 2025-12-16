@@ -407,8 +407,18 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     };
 
     const fetchLocationName = async (lat: number, lng: number) => {
-        // Disabled to prevent CORS errors on static deployment
-        return null;
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+            const data = await res.json();
+            if (data && data.address) {
+                // Try to find the most relevant "village" name
+                return data.address.village || data.address.town || data.address.city || data.address.suburb || data.name || null;
+            }
+            return null;
+        } catch (e) {
+            console.warn("Reverse geocoding failed", e);
+            return null;
+        }
     };
 
     // Search Handler
@@ -423,8 +433,12 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`);
             const data = await res.json();
             if (data && data.length > 0) {
-                const { lat, lon } = data[0];
+                const { lat, lon, display_name } = data[0];
                 mapInstanceRef.current.flyTo([parseFloat(lat), parseFloat(lon)], 15, { duration: 1.5 });
+
+                // Update Project Name from Search
+                const shortName = display_name.split(',')[0];
+                setProjectDetails(prev => ({ ...prev, siteName: shortName }));
             } else {
                 alert("Location not found");
             }
