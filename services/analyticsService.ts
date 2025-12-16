@@ -93,6 +93,10 @@ export const AnalyticsService = {
 
       // Validate data structure roughly
       if (data && typeof data === 'object' && 'totalReports' in data) {
+        // Safe guard against missing recentLogs
+        if (!Array.isArray(data.recentLogs)) {
+          data.recentLogs = [];
+        }
         return data as DashboardStats;
       } else {
         console.warn("Received data but it doesn't match DashboardStats interface:", data);

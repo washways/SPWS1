@@ -104,6 +104,7 @@ function getStats() {
       totalCapexEstimated: 0,
       avgTimeSpentSeconds: 0,
       solarWinRate: 0,
+      recentLogs: []
     };
   }
   return stats;
