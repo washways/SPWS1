@@ -1429,7 +1429,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
                     <button
                         onClick={() => setShowDTW(!showDTW)}
-                        className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showDTW ? 'bg-indigo-500 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+                        className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showDTW ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
                     >
                         <Droplets className="w-4 h-4" />
                         <span className="text-xs font-semibold">Depth to Water</span>
@@ -1457,7 +1457,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     )}
                     <button
                         onClick={() => setShowGWPotential(!showGWPotential)}
-                        className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showGWPotential ? 'bg-indigo-500 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+                        className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showGWPotential ? 'bg-orange-600 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
                     >
                         <CircleDot className="w-4 h-4" />
                         <span className="text-xs font-semibold">GW Potential</span>
@@ -1485,7 +1485,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     )}
                     <button
                         onClick={() => setShowFABDEM(!showFABDEM)}
-                        className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showFABDEM ? 'bg-indigo-500 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+                        className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showFABDEM ? 'bg-green-700 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
                     >
                         <Mountain className="w-4 h-4" />
                         <span className="text-xs font-semibold">FABDEM</span>
@@ -1513,7 +1513,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     )}
                     <button
                         onClick={() => setShowHillshade(!showHillshade)}
-                        className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showHillshade ? 'bg-indigo-500 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+                        className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showHillshade ? 'bg-slate-700 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
                     >
                         <Mountain className="w-4 h-4" />
                         <span className="text-xs font-semibold">Hillshade</span>
