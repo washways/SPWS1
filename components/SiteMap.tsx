@@ -107,6 +107,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     const [showFABDEM, setShowFABDEM] = useState(false);
     const [showHillshade, setShowHillshade] = useState(false);
     const [layerOpacity, setLayerOpacity] = useState({ dtw: 0.7, gw: 0.7, dem: 0.7, hillshade: 0.5 });
+    const [layerLoading, setLayerLoading] = useState({ dtw: false, gw: false, dem: false, hillshade: false });
     const geeLayersRef = useRef<{ dtw: any, gw: any, dem: any, hillshade: any }>({ dtw: null, gw: null, dem: null, hillshade: null });
 
     const [loadingElevation, setLoadingElevation] = useState(false);
@@ -208,6 +209,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             if (show) {
                 if (!geeLayersRef.current[type]) {
                     console.log(`Loading COG Layer: ${name} (Split View)`);
+                    setLayerLoading(prev => ({ ...prev, [type]: true }));
 
                     const layerGroup = L.layerGroup().addTo(mapInstanceRef.current!);
                     geeLayersRef.current[type] = layerGroup;
@@ -281,7 +283,10 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
                                 // Apply auto-contrast after all parts loaded
                                 if (i === 4) {
-                                    setTimeout(() => applyAutoContrast(type, layerGroup), 1000);
+                                    setTimeout(() => {
+                                        applyAutoContrast(type, layerGroup);
+                                        setLayerLoading(prev => ({ ...prev, [type]: false }));
+                                    }, 1000);
                                 }
                             }).catch(e => console.warn(`Skipping part ${i} of ${name}:`, e));
                         }
@@ -1433,6 +1438,11 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     >
                         <Droplets className="w-4 h-4" />
                         <span className="text-xs font-semibold">Depth to Water</span>
+                        {layerLoading.dtw && (
+                            <div className="ml-auto">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                            </div>
+                        )}
                     </button>
                     {showDTW && (
                         <div className="px-2 py-1">
@@ -1453,6 +1463,17 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 }}
                                 className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                             />
+                            {/* Legend */}
+                            <div className="mt-2 p-2 bg-white rounded border border-gray-200">
+                                <div className="text-[9px] font-semibold text-gray-700 mb-1">Depth to Water (m)</div>
+                                <div className="flex items-center gap-1">
+                                    <span className="text-[8px] text-gray-600">0</span>
+                                    <div className="flex-1 h-3 rounded" style={{
+                                        background: 'linear-gradient(to right, #0015ff, #00a4ff, #00fff0, #00ff00, #ccff00, #ff8800, #ff0000)'
+                                    }}></div>
+                                    <span className="text-[8px] text-gray-600">60</span>
+                                </div>
+                            </div>
                         </div>
                     )}
                     <button
@@ -1461,6 +1482,11 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     >
                         <CircleDot className="w-4 h-4" />
                         <span className="text-xs font-semibold">GW Potential</span>
+                        {layerLoading.gw && (
+                            <div className="ml-auto">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                            </div>
+                        )}
                     </button>
                     {showGWPotential && (
                         <div className="px-2 py-1">
@@ -1489,6 +1515,11 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     >
                         <Mountain className="w-4 h-4" />
                         <span className="text-xs font-semibold">FABDEM</span>
+                        {layerLoading.dem && (
+                            <div className="ml-auto">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                            </div>
+                        )}
                     </button>
                     {showFABDEM && (
                         <div className="px-2 py-1">
@@ -1517,6 +1548,11 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     >
                         <Mountain className="w-4 h-4" />
                         <span className="text-xs font-semibold">Hillshade</span>
+                        {layerLoading.hillshade && (
+                            <div className="ml-auto">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                            </div>
+                        )}
                     </button>
                     {showHillshade && (
                         <div className="px-2 py-1">
