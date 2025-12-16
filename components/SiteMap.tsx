@@ -105,8 +105,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     const [showDTW, setShowDTW] = useState(false);
     const [showGWPotential, setShowGWPotential] = useState(false);
     const [showFABDEM, setShowFABDEM] = useState(false);
-    const [layerOpacity, setLayerOpacity] = useState({ dtw: 0.7, gw: 0.7, dem: 0.7 });
-    const geeLayersRef = useRef<{ dtw: any, gw: any, dem: any }>({ dtw: null, gw: null, dem: null });
+    const [showHillshade, setShowHillshade] = useState(false);
+    const [layerOpacity, setLayerOpacity] = useState({ dtw: 0.7, gw: 0.7, dem: 0.7, hillshade: 0.5 });
+    const geeLayersRef = useRef<{ dtw: any, gw: any, dem: any, hillshade: any }>({ dtw: null, gw: null, dem: null, hillshade: null });
 
     const [loadingElevation, setLoadingElevation] = useState(false);
     const [counts, setCounts] = useState({ taps: 0, mainLen: 0, risingLen: 0, distLen: 0, hasBh: false, hasTank: false, schools: 0, clinics: 0, gardens: 0, hasGrid: false });
@@ -146,11 +147,12 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     const visParamsRef = useRef({
         dtw: { min: 0, max: 60, palette: ['#0015ff', '#00a4ff', '#00fff0', '#00ff00', '#ccff00', '#ff8800', '#ff0000'] },
         gw: { min: 0, max: 0.5, palette: ['#ff0000', '#ff8800', '#ccff00', '#00ff00', '#00fff0', '#00a4ff', '#0015ff'] },
-        dem: { min: 0, max: 3000, palette: ['#1a472a', '#2d5a3d', '#4a7c59', '#73a373', '#a8d5a8', '#d4e7d4', '#f5f5dc', '#d2b48c', '#8b7355', '#654321', '#ffffff'] }
+        dem: { min: 0, max: 3000, palette: ['#1a472a', '#2d5a3d', '#4a7c59', '#73a373', '#a8d5a8', '#d4e7d4', '#f5f5dc', '#d2b48c', '#8b7355', '#654321', '#ffffff'] },
+        hillshade: { min: 0, max: 255, palette: ['#000000', '#ffffff'] }
     });
 
     // Auto-Contrast Handler (runs automatically on layer load)
-    const applyAutoContrast = (type: 'dtw' | 'gw' | 'dem', layerGroup: any) => {
+    const applyAutoContrast = (type: 'dtw' | 'gw' | 'dem' | 'hillshade', layerGroup: any) => {
         const values: number[] = [];
 
         console.log(`[Auto-Contrast] Calculating stats for ${type}...`);
@@ -202,7 +204,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     useEffect(() => {
         if (!mapInstanceRef.current) return;
 
-        const handleCOGLayer = async (show: boolean, type: 'dtw' | 'gw' | 'dem', name: string) => {
+        const handleCOGLayer = async (show: boolean, type: 'dtw' | 'gw' | 'dem' | 'hillshade', name: string) => {
             if (show) {
                 if (!geeLayersRef.current[type]) {
                     console.log(`Loading COG Layer: ${name} (Split View)`);
@@ -229,7 +231,8 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
                         const baseName = type === 'dtw' ? 'dtw_raw'
                             : type === 'gw' ? 'gw_raw'
-                                : 'elevation_raw';
+                                : type === 'hillshade' ? 'hillshade_raw'
+                                    : 'elevation_raw';
 
                         for (let i = 1; i <= 4; i++) {
                             const url = `maps/${baseName}_${i}.tif`;
@@ -301,8 +304,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         handleCOGLayer(showDTW, 'dtw', 'Depth to Water');
         handleCOGLayer(showGWPotential, 'gw', 'Groundwater Potential');
         handleCOGLayer(showFABDEM, 'dem', 'Elevation');
+        handleCOGLayer(showHillshade, 'hillshade', 'Hillshade');
 
-    }, [showDTW, showGWPotential, showFABDEM]);
+    }, [showDTW, showGWPotential, showFABDEM, showHillshade]);
 
     // -- Icons --
     const icons = useRef({
@@ -1499,6 +1503,34 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                     setLayerOpacity({ ...layerOpacity, dem: newOpacity });
                                     if (geeLayersRef.current.dem) {
                                         geeLayersRef.current.dem.eachLayer((layer: any) => {
+                                            if (layer.setOpacity) layer.setOpacity(newOpacity);
+                                        });
+                                    }
+                                }}
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                        </div>
+                    )}
+                    <button
+                        onClick={() => setShowHillshade(!showHillshade)}
+                        className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showHillshade ? 'bg-indigo-500 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+                    >
+                        <Mountain className="w-4 h-4" />
+                        <span className="text-xs font-semibold">Hillshade</span>
+                    </button>
+                    {showHillshade && (
+                        <div className="px-2 py-1">
+                            <label className="text-[10px] text-gray-600">Opacity: {Math.round(layerOpacity.hillshade * 100)}%</label>
+                            <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={layerOpacity.hillshade * 100}
+                                onChange={(e) => {
+                                    const newOpacity = parseFloat(e.target.value) / 100;
+                                    setLayerOpacity({ ...layerOpacity, hillshade: newOpacity });
+                                    if (geeLayersRef.current.hillshade) {
+                                        geeLayersRef.current.hillshade.eachLayer((layer: any) => {
                                             if (layer.setOpacity) layer.setOpacity(newOpacity);
                                         });
                                     }
