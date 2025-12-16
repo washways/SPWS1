@@ -105,6 +105,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     const [showDTW, setShowDTW] = useState(false);
     const [showGWPotential, setShowGWPotential] = useState(false);
     const [showFABDEM, setShowFABDEM] = useState(false);
+    const [layerOpacity, setLayerOpacity] = useState({ dtw: 0.7, gw: 0.7, dem: 0.7 });
     const geeLayersRef = useRef<{ dtw: any, gw: any, dem: any }>({ dtw: null, gw: null, dem: null });
 
     const [loadingElevation, setLoadingElevation] = useState(false);
@@ -141,23 +142,15 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     const selectedCountryRef = useRef(selectedCountry);
     useEffect(() => { selectedCountryRef.current = selectedCountry; }, [selectedCountry]);
 
-    // Visualization Params Ref (Dynamic Contrast)
+    // Visualization Params Ref (Dynamic Contrast) - Match GEE export palettes
     const visParamsRef = useRef({
         dtw: { min: 0, max: 60, palette: ['#0015ff', '#00a4ff', '#00fff0', '#00ff00', '#ccff00', '#ff8800', '#ff0000'] },
-        gw: { min: 0, max: 100, palette: ['#8b0000', '#ff4500', '#ffd700', '#7fff00', '#006400'] },
-        dem: { min: 500, max: 2000, palette: ['#000000', '#ffffff'] }
+        gw: { min: 0, max: 0.5, palette: ['#ff0000', '#ff8800', '#ccff00', '#00ff00', '#00fff0', '#00a4ff', '#0015ff'] },
+        dem: { min: 0, max: 3000, palette: ['#1a472a', '#2d5a3d', '#4a7c59', '#73a373', '#a8d5a8', '#d4e7d4', '#f5f5dc', '#d2b48c', '#8b7355', '#654321', '#ffffff'] }
     });
 
-    // Auto-Contrast Handler
-    const handleAutoContrast = () => {
-        const activeType = showDTW ? 'dtw' : showGWPotential ? 'gw' : showFABDEM ? 'dem' : null;
-        if (!activeType || !geeLayersRef.current[activeType as 'dtw' | 'gw' | 'dem']) {
-            alert("Please turn on a layer first!");
-            return;
-        }
-
-        const type = activeType as 'dtw' | 'gw' | 'dem';
-        const layerGroup = geeLayersRef.current[type];
+    // Auto-Contrast Handler (runs automatically on layer load)
+    const applyAutoContrast = (type: 'dtw' | 'gw' | 'dem', layerGroup: any) => {
         const values: number[] = [];
 
         console.log(`[Auto-Contrast] Calculating stats for ${type}...`);
@@ -167,11 +160,13 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             if (layer.georaster && layer.georaster.values) {
                 try {
                     const band0 = layer.georaster.values[0];
-                    // Sample every 10th pixel for performance
-                    for (let r = 0; r < layer.georaster.height; r += 10) {
-                        for (let c = 0; c < layer.georaster.width; c += 10) {
+                    // Sample every 20th pixel for performance
+                    for (let r = 0; r < layer.georaster.height; r += 20) {
+                        for (let c = 0; c < layer.georaster.width; c += 20) {
                             const v = band0[r][c];
-                            if (v > -9999 && !isNaN(v)) values.push(v);
+                            if (v !== -9999 && v !== null && !isNaN(v) && v !== undefined) {
+                                values.push(v);
+                            }
                         }
                     }
                 } catch (e) {
@@ -181,8 +176,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         });
 
         if (values.length === 0) {
-            console.warn("No values found to stretch.");
-            alert("No data to analyze. Make sure the layer is fully loaded.");
+            console.warn(`[Auto-Contrast] No values found for ${type}. Using defaults.`);
             return;
         }
 
@@ -191,7 +185,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         const p2 = values[Math.floor(values.length * 0.02)];
         const p98 = values[Math.floor(values.length * 0.98)];
 
-        console.log(`[Auto-Contrast] New Min: ${p2.toFixed(2)}, Max: ${p98.toFixed(2)}`);
+        console.log(`[Auto-Contrast] ${type} - Min: ${p2.toFixed(2)}, Max: ${p98.toFixed(2)} (from ${values.length} samples)`);
 
         // Update visualization parameters
         visParamsRef.current[type].min = p2;
@@ -201,8 +195,6 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         layerGroup.eachLayer((layer: any) => {
             if (layer.redraw) layer.redraw();
         });
-
-        alert(`Contrast adjusted!\nMin: ${p2.toFixed(2)}\nMax: ${p98.toFixed(2)}`);
     };
 
 
@@ -268,7 +260,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
                                 const layer = new GeoRasterLayer({
                                     georaster: georaster,
-                                    opacity: 0.7,
+                                    opacity: layerOpacity[type],
                                     pixelValuesToColorFn: (values: any) => {
                                         const v = values[0];
                                         if (v === -9999 || v === null || isNaN(v)) return null;
@@ -283,6 +275,11 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 });
 
                                 layer.addTo(layerGroup);
+
+                                // Apply auto-contrast after all parts loaded
+                                if (i === 4) {
+                                    setTimeout(() => applyAutoContrast(type, layerGroup), 1000);
+                                }
                             }).catch(e => console.warn(`Skipping part ${i} of ${name}:`, e));
                         }
                     } catch (e) {
@@ -1433,6 +1430,27 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                         <Droplets className="w-4 h-4" />
                         <span className="text-xs font-semibold">Depth to Water</span>
                     </button>
+                    {showDTW && (
+                        <div className="px-2 py-1">
+                            <label className="text-[10px] text-gray-600">Opacity: {Math.round(layerOpacity.dtw * 100)}%</label>
+                            <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={layerOpacity.dtw * 100}
+                                onChange={(e) => {
+                                    const newOpacity = parseFloat(e.target.value) / 100;
+                                    setLayerOpacity({ ...layerOpacity, dtw: newOpacity });
+                                    if (geeLayersRef.current.dtw) {
+                                        geeLayersRef.current.dtw.eachLayer((layer: any) => {
+                                            if (layer.setOpacity) layer.setOpacity(newOpacity);
+                                        });
+                                    }
+                                }}
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                        </div>
+                    )}
                     <button
                         onClick={() => setShowGWPotential(!showGWPotential)}
                         className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showGWPotential ? 'bg-indigo-500 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
@@ -1440,6 +1458,27 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                         <CircleDot className="w-4 h-4" />
                         <span className="text-xs font-semibold">GW Potential</span>
                     </button>
+                    {showGWPotential && (
+                        <div className="px-2 py-1">
+                            <label className="text-[10px] text-gray-600">Opacity: {Math.round(layerOpacity.gw * 100)}%</label>
+                            <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={layerOpacity.gw * 100}
+                                onChange={(e) => {
+                                    const newOpacity = parseFloat(e.target.value) / 100;
+                                    setLayerOpacity({ ...layerOpacity, gw: newOpacity });
+                                    if (geeLayersRef.current.gw) {
+                                        geeLayersRef.current.gw.eachLayer((layer: any) => {
+                                            if (layer.setOpacity) layer.setOpacity(newOpacity);
+                                        });
+                                    }
+                                }}
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                        </div>
+                    )}
                     <button
                         onClick={() => setShowFABDEM(!showFABDEM)}
                         className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showFABDEM ? 'bg-indigo-500 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
@@ -1447,28 +1486,27 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                         <Mountain className="w-4 h-4" />
                         <span className="text-xs font-semibold">FABDEM</span>
                     </button>
-
-                    <div className="w-full h-px bg-gray-300 mt-2"></div>
-
-                    <button
-                        onClick={handleAutoContrast}
-                        className="px-3 py-2 rounded-lg flex items-center gap-2 bg-slate-800 text-white shadow-md hover:bg-slate-700 transition-all mt-2"
-                        title="Adjust contrast based on current view"
-                    >
-                        <Activity className="w-4 h-4" />
-                        <span className="text-xs font-semibold">Auto Contrast</span>
-                    </button>
-
-                    <div className="w-full h-px bg-gray-300 mt-2"></div>
-
-                    <button
-                        onClick={handleAutoContrast}
-                        className="px-3 py-2 rounded-lg flex items-center gap-2 bg-slate-800 text-white shadow-md hover:bg-slate-700 transition-all mt-2"
-                        title="Adjust contrast based on current view"
-                    >
-                        <Activity className="w-4 h-4" />
-                        <span className="text-xs font-semibold">Auto Contrast</span>
-                    </button>
+                    {showFABDEM && (
+                        <div className="px-2 py-1">
+                            <label className="text-[10px] text-gray-600">Opacity: {Math.round(layerOpacity.dem * 100)}%</label>
+                            <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={layerOpacity.dem * 100}
+                                onChange={(e) => {
+                                    const newOpacity = parseFloat(e.target.value) / 100;
+                                    setLayerOpacity({ ...layerOpacity, dem: newOpacity });
+                                    if (geeLayersRef.current.dem) {
+                                        geeLayersRef.current.dem.eachLayer((layer: any) => {
+                                            if (layer.setOpacity) layer.setOpacity(newOpacity);
+                                        });
+                                    }
+                                }}
+                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                        </div>
+                    )}
 
                     <div className="w-full h-px bg-gray-300 mt-2"></div>
 
