@@ -162,21 +162,46 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         layerGroup.eachLayer((layer: any) => {
             if (layer.georaster && layer.georaster.values) {
                 try {
-                    const band0 = layer.georaster.values[0];
+                    console.log(`[Auto-Contrast] Georaster structure:`, {
+                        numberOfBands: layer.georaster.numberOfRasters || layer.georaster.values.length,
+                        height: layer.georaster.height,
+                        width: layer.georaster.width,
+                        valuesType: typeof layer.georaster.values,
+                        isArray: Array.isArray(layer.georaster.values)
+                    });
+
+                    // Handle different structures
+                    let band0 = layer.georaster.values[0];
+
+                    // If values is not an array of arrays, it might be the data directly
+                    if (!Array.isArray(band0)) {
+                        band0 = layer.georaster.values;
+                    }
+
+                    if (!Array.isArray(band0)) {
+                        console.warn(`[Auto-Contrast] Unexpected data structure for ${type}`);
+                        return;
+                    }
+
                     // Sample every 20th pixel for performance
                     for (let r = 0; r < layer.georaster.height; r += 20) {
+                        const row = band0[r];
+                        if (!row) continue;
+
                         for (let c = 0; c < layer.georaster.width; c += 20) {
-                            const v = band0[r][c];
-                            if (v !== -9999 && v !== null && !isNaN(v) && v !== undefined) {
+                            const v = row[c];
+                            if (v !== -9999 && v !== null && !isNaN(v) && v !== undefined && v !== 0) {
                                 values.push(v);
                             }
                         }
                     }
                 } catch (e) {
-                    console.warn("Error sampling raster", e);
+                    console.error(`[Auto-Contrast] Error sampling raster for ${type}:`, e);
                 }
             }
         });
+
+        console.log(`[Auto-Contrast] Collected ${values.length} samples for ${type}`);
 
         if (values.length === 0) {
             console.warn(`[Auto-Contrast] No values found for ${type}. Using defaults.`);
@@ -1514,7 +1539,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                         className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showFABDEM ? 'bg-green-700 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
                     >
                         <Mountain className="w-4 h-4" />
-                        <span className="text-xs font-semibold">FABDEM</span>
+                        <span className="text-xs font-semibold">Elevation</span>
                         {layerLoading.dem && (
                             <div className="ml-auto">
                                 <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
