@@ -103,6 +103,35 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
                                     </div>
                                 </div>
                             </div>
+
+                            {/* New Data Layers Section */}
+                            <div className="mt-6 pt-6 border-t border-slate-200">
+                                <h3 className="font-bold text-[#003E5E] mb-3 text-lg">📊 Data Layers & Sources</h3>
+                                <div className="space-y-3 text-sm">
+                                    <div className="bg-white p-3 rounded-lg border border-slate-200">
+                                        <p className="font-semibold text-[#003E5E] mb-1">🏢 Google Buildings</p>
+                                        <p className="text-slate-600 text-xs">Building footprints from <a href="https://sites.research.google/open-buildings/" target="_blank" rel="noopener noreferrer" className="text-[#1CABE2] hover:underline">Google Open Buildings</a>. Used to estimate population served via 250m buffer analysis.</p>
+                                    </div>
+                                    <div className="bg-white p-3 rounded-lg border border-slate-200">
+                                        <p className="font-semibold text-[#003E5E] mb-1">💧 Depth to Water (DTW)</p>
+                                        <p className="text-slate-600 text-xs">Estimated groundwater depth from <a href="https://code.earthengine.google.com/dataset/users/washways/DTW_estimated_depth_Malawi_v1_py" target="_blank" rel="noopener noreferrer" className="text-[#1CABE2] hover:underline">WashWays GEE Dataset</a>. Helps determine borehole depth and pumping requirements.</p>
+                                    </div>
+                                    <div className="bg-white p-3 rounded-lg border border-slate-200">
+                                        <p className="font-semibold text-[#003E5E] mb-1">🌊 Groundwater Potential</p>
+                                        <p className="text-slate-600 text-xs">Aquifer productivity estimates from <a href="https://code.earthengine.google.com/dataset/users/washways/GW_Potential_Malawi_v1_py" target="_blank" rel="noopener noreferrer" className="text-[#1CABE2] hover:underline">WashWays GEE Dataset</a>. Indicates likelihood of successful borehole drilling.</p>
+                                    </div>
+                                    <div className="bg-white p-3 rounded-lg border border-slate-200">
+                                        <p className="font-semibold text-[#003E5E] mb-1">⛰️ Elevation & Hillshade</p>
+                                        <p className="text-slate-600 text-xs">Terrain data from <a href="https://developers.google.com/earth-engine/datasets/catalog/USGS_SRTMGL1_003" target="_blank" rel="noopener noreferrer" className="text-[#1CABE2] hover:underline">NASA SRTM</a>. Used for hydraulic head calculations and terrain visualization.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Population Calculation */}
+                            <div className="mt-4 pt-4 border-t border-slate-200">
+                                <h3 className="font-bold text-[#003E5E] mb-2">👥 Population Served Calculation</h3>
+                                <p className="text-xs text-slate-600">Population is estimated by counting buildings within a 250m buffer of the water network, then multiplying by the average household size (configurable in settings, default: 5 people/household).</p>
+                            </div>
                         </div>
 
                         <div className="flex flex-col md:flex-row gap-4 justify-center">
