@@ -14,15 +14,15 @@ Follow these steps exactly to create a new backend for your application. This me
     *   In **Feedback**: Type `Timestamp`, `Message` in row 1.
     *   In **Stats**: Type `Key`, `Value` in row 1. (e.g., A2=`totalPopulationServed`, B2=`0`)
 
-## Phase 2: Create the Script
+## Phase 2: Create the Script (UPDATED V2)
 1.  In your Google Sheet, click **Extensions** (top menu) > **Apps Script**.
 2.  A new tab will open. Name the project **`WashWays Backend`** (click "Untitled project" at top left).
 3.  **Delete** all code in `Code.gs`.
-4.  **Copy & Paste** the code below into `Code.gs`:
+4.  **Copy & Paste** the code below into `Code.gs`. **(This version now automatically calculates stats!)**
 
 ```javascript
 /* =========================================================================
-   WASHWAYS ANALYTICS BACKEND
+   WASHWAYS ANALYTICS BACKEND (V2 - With Stats Aggregation)
    ========================================================================= */
 
 function doGet(e) {
@@ -35,7 +35,7 @@ function doPost(e) {
 
 function handleRequest(e) {
   var lock = LockService.getScriptLock();
-  lock.tryLock(10000); // Wait up to 10s for other requests
+  lock.tryLock(10000); 
 
   try {
     var output = {};
@@ -48,22 +48,23 @@ function handleRequest(e) {
         data = JSON.parse(e.postData.contents);
         if (data.action) action = data.action;
       } catch (err) {
-        // Invalid JSON body
+        // Invalid JSON
       }
     }
 
     // --- ROUTER ---
     if (action === 'get_stats') {
-      output = getStats();
+      output = calculateStatsFromLogs(); // Real-time calc
     } else if (action === 'log_report') {
       output = logData('Logs', data);
+      updateStatsSheet(); // Update the visible 'Stats' tab
     } else if (action === 'feedback') {
       output = logData('Feedback', data);
     } else {
       output = { status: 'error', message: 'Unknown action: ' + action };
     }
 
-    // --- RESPONSE (CORS FIX) ---
+    // --- RESPONSE ---
     return ContentService.createTextOutput(JSON.stringify(output))
       .setMimeType(ContentService.MimeType.JSON);
 
@@ -77,38 +78,7 @@ function handleRequest(e) {
   }
 }
 
-// --- CORE FUNCTIONS ---
-
-function getStats() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName('Stats');
-  
-  if (!sheet) return { error: "Stats sheet not found" };
-
-  // Simple Key-Value Reader (Assuming Column A=Key, Column B=Value)
-  var data = sheet.getDataRange().getValues();
-  var stats = {};
-  
-  // Start from row 1 (index 1) to skip header
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][0]) {
-      stats[data[i][0]] = data[i][1];
-    }
-  }
-
-  // Provide defaults if empty
-  if (Object.keys(stats).length === 0) {
-    return {
-      totalReports: 0,
-      totalPopulationServed: 0,
-      totalCapexEstimated: 0,
-      avgTimeSpentSeconds: 0,
-      solarWinRate: 0,
-      recentLogs: []
-    };
-  }
-  return stats;
-}
+// --- LOGGING ---
 
 function logData(sheetName, data) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -117,11 +87,102 @@ function logData(sheetName, data) {
   if (!sheet) return { status: 'error', message: sheetName + ' sheet missing' };
   
   // Append Timestamp + JSON of data
-  // You can customize this to break out columns if preferred
   var row = [new Date(), JSON.stringify(data)];
   sheet.appendRow(row);
   
   return { status: 'success' };
+}
+
+// --- STATS CALCULATION ---
+
+function calculateStatsFromLogs() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Logs');
+  if (!sheet) return getDefaultStats();
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return getDefaultStats(); // Only header or empty
+
+  // Read all logs (Column B contains the JSON)
+  // Get Range: Row 2, Col 2 (B), down to last row, 1 column wide
+  var values = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
+  
+  var totalReports = 0;
+  var totalPop = 0;
+  var totalCapex = 0;
+  var totalTime = 0;
+  var solarWins = 0;
+  var recentLogs = [];
+
+  // usage: Iterate backwards to get recent logs first
+  for (var i = values.length - 1; i >= 0; i--) {
+    try {
+      var jsonStr = values[i][0];
+      if (!jsonStr) continue;
+      
+      var entry = JSON.parse(jsonStr);
+      
+      // Aggregates
+      totalReports++;
+      totalPop += (entry.population || 0);
+      totalCapex += (entry.solarCapex || 0); // Estimate based on Solar cost
+      totalTime += (entry.timeSpentSeconds || 0);
+      if (entry.winner === 'Solar') solarWins++;
+
+      // Recent Logs (Limit 50)
+      if (recentLogs.length < 50) {
+        // Add timestamp if missing (from row index approx)
+        if (!entry.timestamp) entry.timestamp = new Date().toISOString(); 
+        // Note: Real timestamp is in Col A, but simpler to just use current time 
+        // or rely on client sent time if we were reading Col A too.
+        // Let's rely on client data for simplicity here.
+        recentLogs.push(entry);
+      }
+
+    } catch (e) {
+      // bad json, skip
+    }
+  }
+
+  var winRate = totalReports > 0 ? (solarWins / totalReports) * 100 : 0;
+  var avgTime = totalReports > 0 ? (totalTime / totalReports) : 0;
+
+  return {
+    totalReports: totalReports,
+    totalPopulationServed: totalPop,
+    totalCapexEstimated: totalCapex,
+    avgTimeSpentSeconds: Math.round(avgTime),
+    solarWinRate: Math.round(winRate),
+    recentLogs: recentLogs
+  };
+}
+
+function getDefaultStats() {
+  return {
+    totalReports: 0,
+    totalPopulationServed: 0,
+    totalCapexEstimated: 0,
+    avgTimeSpentSeconds: 0,
+    solarWinRate: 0,
+    recentLogs: []
+  };
+}
+
+// Update the visible 'Stats' tab for the user to see in Sheets
+function updateStatsSheet() {
+  var stats = calculateStatsFromLogs();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Stats');
+  
+  if (sheet) {
+    sheet.clear();
+    sheet.appendRow(["Key", "Value"]); // Header
+    sheet.appendRow(["Last Updated", new Date()]);
+    sheet.appendRow(["Total Reports", stats.totalReports]);
+    sheet.appendRow(["Total Pop Served", stats.totalPopulationServed]);
+    sheet.appendRow(["Total Capex", stats.totalCapexEstimated]);
+    sheet.appendRow(["Solar Win Rate (%)", stats.solarWinRate]);
+  }
 }
 ```
 
@@ -129,16 +190,12 @@ function logData(sheetName, data) {
 1.  Click **Deploy** (blue button, top right) > **New deployment**.
 2.  **Select type**: Click the Gear icon ⚙️ > **Web app**.
 3.  **Fill in details**:
-    *   **Description**: `Initial Setup`
+    *   **Description**: `Stats Fix`
     *   **Execute as**: **`Me`** (Your email address).
-    *   **Who has access**: **`Anyone`** (Must be "Anyone", NOT "Anyone with Google Account").
+    *   **Who has access**: **`Anyone`**.
 4.  Click **Deploy**.
-5.  If asked to **Authorize Access**:
-    *   Click "Review Permissions".
-    *   Choose your account.
-    *   (If you see "Google hasn't verified this app"): Click **Advanced** > **Go to WashWays Backend (unsafe)**.
-    *   Click **Allow**.
-6.  **COPY the URL** (It ends in `/exec`).
+5.  **Authorize** completely.
+6.  **COPY the URL**.
 
 ## Phase 4: Connect App
 1.  Open your project file: `services/analyticsService.ts`.
