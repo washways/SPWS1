@@ -700,16 +700,6 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 const fgbUrl = `https://data.source.coop/vida/google-microsoft-open-buildings/flatgeobuf/by_country/country_iso=${selectedCountry}/${selectedCountry}.fgb`;
                 console.log(`Loading Google Buildings (FGB) for ${selectedCountry}: ${fgbUrl}`);
 
-                // Check if resource is reachable before trying to deserialize
-                try {
-                    const headRes = await fetch(fgbUrl, { method: 'HEAD' });
-                    if (!headRes.ok) {
-                        throw new Error(`FGB URL not reachable: ${headRes.status} ${headRes.statusText}`);
-                    }
-                } catch (netErr) {
-                    console.warn("Network check failed for FGB, trying to proceed anyway...", netErr);
-                }
-
                 // Create a GeoJSON layer
                 buildingsLayer = L.geoJSON(null, {
                     // renderer: L.svg(), // Removed invalid option, handled by map preference
@@ -740,13 +730,26 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                         buildingsLayer.clearLayers();
 
                         try {
-                            // Use flatgeobuf to fetch features in bounds
-                            // Note: deserialize uses fetch internally with Range headers
-                            const iter = deserialize(fgbUrl, rect);
+                            // Use flatgeobuf to fetch features in bounds.
+                            // `nocache=true` avoids browser cache issues seen with ranged requests.
+                            const loadFeatures = async (url: string) => {
+                                const iter = (deserialize as any)(url, rect, undefined, true);
+                                let loadedCount = 0;
+                                for await (const feature of iter) {
+                                    buildingsLayer.addData(feature as any);
+                                    loadedCount++;
+                                }
+                                return loadedCount;
+                            };
+
                             let count = 0;
-                            for await (const feature of iter) {
-                                buildingsLayer.addData(feature as any);
-                                count++;
+                            try {
+                                count = await loadFeatures(fgbUrl);
+                            } catch (primaryErr) {
+                                // Retry once with a cache-busted URL for browsers that fail on cached range ops.
+                                console.warn('Primary FGB fetch failed, retrying with cache-busted URL...', primaryErr);
+                                const cacheBustedUrl = `${fgbUrl}?nocache=${Date.now()}`;
+                                count = await loadFeatures(cacheBustedUrl);
                             }
                             console.log(`Loaded ${count} Google Buildings features`);
 
