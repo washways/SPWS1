@@ -5,6 +5,7 @@ import { Map as MapIcon, Navigation, Trash2, Settings, CheckCircle, Layers, Disc
 import { HydraulicInputs, SystemSpecs, BoQItem, PipelineProfile, SystemGeometry, ProjectDetails } from '../types';
 import { DESIGN_COSTS, INSTITUTIONAL_DEMAND } from '../constants';
 import { deserialize } from 'flatgeobuf/lib/mjs/geojson';
+import { notifyApp } from '../utils/notifications';
 
 interface SiteMapProps {
     population: number;
@@ -430,7 +431,8 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         try {
             // Use a simple fetch without custom headers to avoid preflight CORS issues
             // If this still fails, we might need a proxy or a different service.
-            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`);
+            const countryCode = selectedCountry.toLowerCase();
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=${countryCode}&q=${encodeURIComponent(searchQuery)}`);
             const data = await res.json();
             if (data && data.length > 0) {
                 const { lat, lon, display_name } = data[0];
@@ -440,11 +442,11 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 const shortName = display_name.split(',')[0];
                 setProjectDetails(prev => ({ ...prev, siteName: shortName }));
             } else {
-                alert("Location not found");
+                notifyApp({ type: "warning", message: "Location not found in the selected country. Try a nearby name." });
             }
         } catch (err) {
             console.error(err);
-            alert("Error searching for location. Please check your internet connection.");
+            notifyApp({ type: "error", message: "Search failed. Please check your internet connection." });
         } finally {
             setSearching(false);
         }
@@ -638,54 +640,91 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     // OSM Buildings Layer
     useEffect(() => {
         if (!mapInstanceRef.current) return;
-
-        const fetchAndDisplayOSMBuildings = async () => {
-            if (showOSMBuildings && !osmBuildingLayerRef.current) {
-                setBuildingsLoading(true);
-                try {
-                    const bounds = mapInstanceRef.current!.getBounds();
-                    const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
-                    const query = `[out:json][timeout:25];(way["building"](${bbox}););out geom;`;
-                    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
-
-                    const response = await fetch(url);
-                    const data = await response.json();
-
-                    const features = data.elements.map((element: any) => {
-                        if (element.type === 'way' && element.geometry) {
-                            return {
-                                type: 'Feature',
-                                properties: { building: element.tags?.building || 'yes' },
-                                geometry: {
-                                    type: 'Polygon',
-                                    coordinates: [element.geometry.map((node: any) => [node.lon, node.lat])]
-                                }
-                            };
-                        }
-                        return null;
-                    }).filter(Boolean);
-
-                    const geojson = { type: 'FeatureCollection', features: features };
-
-                    const layer = L.geoJSON(geojson as any, {
-                        style: { color: '#3b82f6', weight: 1, fillColor: '#3b82f6', fillOpacity: 0.3 }
-                    });
-
-                    osmBuildingLayerRef.current = layer.addTo(mapInstanceRef.current!);
-                    console.log(`Loaded ${features.length} OSM buildings`);
-                } catch (error) {
-                    console.error('Error fetching OSM buildings:', error);
-                    alert('Failed to load OSM buildings. Try zooming in to a smaller area.');
-                } finally {
-                    setBuildingsLoading(false);
-                }
-            } else if (!showOSMBuildings && osmBuildingLayerRef.current) {
-                osmBuildingLayerRef.current.remove();
+        const map = mapInstanceRef.current;
+        if (!showOSMBuildings) {
+            if (osmBuildingLayerRef.current) {
+                map.removeLayer(osmBuildingLayerRef.current);
                 osmBuildingLayerRef.current = null;
+            }
+            return;
+        }
+
+        let cancelled = false;
+        let debounceId: number | undefined;
+        let warnedLimit = false;
+        const MAX_FEATURES = 3000;
+
+        if (!osmBuildingLayerRef.current) {
+            osmBuildingLayerRef.current = L.geoJSON(null, {
+                style: { color: '#3b82f6', weight: 1, fillColor: '#3b82f6', fillOpacity: 0.3 }
+            }).addTo(map);
+        }
+
+        const loadFeatures = async () => {
+            setBuildingsLoading(true);
+            try {
+                const bounds = map.getBounds();
+                const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
+                const query = `[out:json][timeout:25];(way["building"](${bbox}););out geom;`;
+                const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                let features = data.elements.map((element: any) => {
+                    if (element.type === 'way' && element.geometry) {
+                        return {
+                            type: 'Feature',
+                            properties: { building: element.tags?.building || 'yes' },
+                            geometry: {
+                                type: 'Polygon',
+                                coordinates: [element.geometry.map((node: any) => [node.lon, node.lat])]
+                            }
+                        };
+                    }
+                    return null;
+                }).filter(Boolean);
+
+                if (features.length > MAX_FEATURES) {
+                    features = features.slice(0, MAX_FEATURES);
+                    if (!warnedLimit) {
+                        warnedLimit = true;
+                        notifyApp({ type: "warning", message: `OSM buildings limited to ${MAX_FEATURES.toLocaleString()} for performance. Zoom in for full detail.` });
+                    }
+                }
+
+                if (cancelled || !osmBuildingLayerRef.current) return;
+                osmBuildingLayerRef.current.clearLayers();
+                osmBuildingLayerRef.current.addData({ type: 'FeatureCollection', features } as any);
+                setAnalysisUpdateTrigger(prev => prev + 1);
+                console.log(`Loaded ${features.length} OSM buildings`);
+            } catch (error) {
+                console.error('Error fetching OSM buildings:', error);
+                notifyApp({ type: "error", message: "Failed to load OSM buildings. Try zooming in." });
+            } finally {
+                if (!cancelled) setBuildingsLoading(false);
             }
         };
 
-        fetchAndDisplayOSMBuildings();
+        const debouncedLoad = () => {
+            if (debounceId) window.clearTimeout(debounceId);
+            debounceId = window.setTimeout(() => {
+                loadFeatures();
+            }, 250);
+        };
+
+        loadFeatures();
+        map.on('moveend', debouncedLoad);
+
+        return () => {
+            cancelled = true;
+            if (debounceId) window.clearTimeout(debounceId);
+            map.off('moveend', debouncedLoad);
+            if (osmBuildingLayerRef.current) {
+                map.removeLayer(osmBuildingLayerRef.current);
+                osmBuildingLayerRef.current = null;
+            }
+        };
     }, [showOSMBuildings]);
 
     // Google Buildings Layer (FlatGeobuf)
@@ -776,7 +815,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 }
             } catch (error) {
                 console.error('Failed to load Google Buildings:', error);
-                alert(`Google Buildings failed to load for ${selectedCountry}. Please check your internet connection or try OSM Buildings.`);
+                notifyApp({ type: "error", message: `Google Buildings failed for ${selectedCountry}. Switching to OSM buildings.` });
                 setShowGoogleBuildings(false);
                 setShowOSMBuildings(true);
                 setBuildingsLoading(false);
@@ -1463,12 +1502,26 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     <button
                         onClick={() => {
                             console.log('Toggling Google Buildings');
-                            setShowGoogleBuildings(!showGoogleBuildings);
+                            const next = !showGoogleBuildings;
+                            setShowGoogleBuildings(next);
+                            if (next) setShowOSMBuildings(false);
                         }}
                         className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showGoogleBuildings ? 'bg-[#1CABE2] text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
                     >
                         <Box className="w-4 h-4" />
-                        <span className="text-xs font-semibold">Buildings</span>
+                        <span className="text-xs font-semibold">Google Buildings</span>
+                    </button>
+
+                    <button
+                        onClick={() => {
+                            const next = !showOSMBuildings;
+                            setShowOSMBuildings(next);
+                            if (next) setShowGoogleBuildings(false);
+                        }}
+                        className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${showOSMBuildings ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
+                    >
+                        <Home className="w-4 h-4" />
+                        <span className="text-xs font-semibold">OSM Buildings</span>
                     </button>
 
                     <div className="w-full h-px bg-gray-300"></div>

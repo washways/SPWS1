@@ -1,52 +1,34 @@
-# Analytics Server Test Guide
+# Analytics Test Guide (Google Sheets Backend)
 
-## Quick Start
+## 1) Configure backend URL
+1. Copy `.env.example` to `.env`.
+2. Set `VITE_GOOGLE_SCRIPT_URL` to your deployed Apps Script Web App URL.
+3. Restart the frontend dev server after editing `.env`.
 
-Run both servers together:
+## 2) Run app
 ```powershell
-$env:PATH = "C:\Users\jrobertson\Downloads\node-v24.11.1-win-x64\node-v24.11.1-win-x64;" + $env:PATH
-npm.cmd run dev:full
+npm run dev
 ```
+Open `http://localhost:5173`.
 
-Then open `http://localhost:5173` in your browser.
+## 3) Verify report logging
+1. Complete a design and click **Download Full Report**.
+2. Open your Google Sheet used by Apps Script.
+3. Check `Logs` tab:
+  - Column A: timestamp.
+  - Column B: JSON payload with site/cost/result fields.
 
-## What Gets Logged
+## 4) Verify feedback logging
+1. Submit feedback from splash/header.
+2. Check `Feedback` tab:
+  - Column A: timestamp.
+  - Column B: JSON payload with message.
 
-Every time a user downloads a report, the following data is automatically saved:
-- Site name and contract number
-- Population (initial and design)
-- System costs (Solar vs Handpump)
-- Economic analysis results (Net Present Value for each option)
-- Winner (which system is more economical)
-- Time spent on the analysis
+## 5) Verify dashboard
+1. Open **Dashboard** tab in app.
+2. Confirm totals populate and recent rows appear.
+3. Use **Refresh Data** and confirm updates after new logs.
 
-## Viewing Analytics
-
-1. Click the **Dashboard** tab in the application
-2. You'll see:
-   - Total reports generated
-   - Total population served across all analyses
-   - Total capital expenditure estimated
-   - Average session time
-   - Solar vs Handpump win rate (pie chart)
-   - Detailed table of all recent reports
-
-## Data Storage
-
-All data is stored in `analytics_data.json` in the project root. This file is created automatically when the first report is logged.
-
-## Server Endpoints
-
-- `POST http://localhost:3001/api/log_report` - Save a new report
-- `POST http://localhost:3001/api/feedback` - Save user feedback
-- `GET http://localhost:3001/api/get_stats` - Get all analytics data
-- `GET http://localhost:3001/api/health` - Check if server is running
-
-## Testing Checklist
-
-- [ ] Both servers start without errors
-- [ ] Can complete an analysis and download PDF
-- [ ] `analytics_data.json` file is created
-- [ ] Dashboard shows the logged report
-- [ ] Can complete multiple analyses and see data accumulate
-- [ ] Dashboard refreshes when clicking "Refresh Data"
+## Expected result
+- If backend is healthy, dashboard status is normal and logs appear in `Logs`.
+- If backend is unavailable or misconfigured, dashboard shows a degraded/error status message.

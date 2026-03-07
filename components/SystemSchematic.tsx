@@ -5,6 +5,7 @@ import * as L from 'leaflet';
 import { BoQItem, HydraulicInputs, SystemSpecs, PipelineProfile, SystemGeometry, ProjectDetails } from '../types';
 import { FileText, Activity, AlertTriangle, Map as MapIcon, ClipboardCheck, Droplets, Download } from 'lucide-react';
 import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart, ReferenceLine, Legend, Bar } from 'recharts';
+import { notifyApp } from '../utils/notifications';
 
 interface SystemSchematicProps {
     inputs: HydraulicInputs;
@@ -27,39 +28,44 @@ export const SystemSchematic: React.FC<SystemSchematicProps> = ({ inputs, specs,
 
     const downloadPDF = async () => {
         setIsDownloading(true);
-        // Small delay to allow UI to update (e.g. show "Generating..." spinner)
-        setTimeout(async () => {
-            const element = document.getElementById('technical-report');
-            if (!element) { 
-                alert("Report element not found.");
-                setIsDownloading(false); 
-                return; 
-            }
 
-            const opt = {
-                margin: [5, 5, 5, 5], 
-                filename: `Technical_Design_${projectDetails.siteName || 'Site'}.pdf`,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true, logging: true, allowTaint: true },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-            };
+        const waitForRender = async () => {
+            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        };
 
-            try {
+        const element = document.getElementById('technical-report');
+        if (!element) {
+            notifyApp({ type: "error", message: "Technical report element not found." });
+            setIsDownloading(false);
+            return;
+        }
+
+        const opt = {
+            margin: [5, 5, 5, 5],
+            filename: `Technical_Design_${projectDetails.siteName || 'Site'}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, logging: true, allowTaint: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+
+        try {
+            await waitForRender();
+            // @ts-ignore
+            if (window.html2pdf) {
                 // @ts-ignore
-                if (window.html2pdf) {
-                    // @ts-ignore
-                    await window.html2pdf().set(opt).from(element).save();
-                } else {
-                    alert("PDF Generator library not loaded. Please refresh and try again.");
-                }
-            } catch (e) {
-                console.error("PDF Generation Error:", e);
-                alert("Failed to generate PDF. Please check console for details.");
-            } finally {
-                setIsDownloading(false);
+                await window.html2pdf().set(opt).from(element).save();
+                notifyApp({ type: "success", message: "Technical PDF downloaded successfully." });
+            } else {
+                notifyApp({ type: "error", message: "PDF generator library not loaded. Please refresh and retry." });
             }
-        }, 100);
+        } catch (e) {
+            console.error("PDF Generation Error:", e);
+            notifyApp({ type: "error", message: "Technical PDF generation failed." });
+        } finally {
+            setIsDownloading(false);
+        }
     };
 
     // --- MAP INITIALIZATION ---

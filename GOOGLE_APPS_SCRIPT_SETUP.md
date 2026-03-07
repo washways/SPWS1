@@ -10,8 +10,8 @@ Follow these steps exactly to create a new backend for your application. This me
     *   Click `+` to add a sheet, rename it to **`Logs`**.
     *   Click `+` to add a sheet, rename it to **`Feedback`**.
 4.  **Setup Header Rows** (Optional but good for visibility):
-    *   In **Logs**: Type `Timestamp`, `Action`, `Data` in row 1.
-    *   In **Feedback**: Type `Timestamp`, `Message` in row 1.
+    *   In **Logs**: Type `Timestamp`, `Data` in row 1.
+    *   In **Feedback**: Type `Timestamp`, `Data` in row 1.
     *   In **Stats**: Type `Key`, `Value` in row 1. (e.g., A2=`totalPopulationServed`, B2=`0`)
 
 ## Phase 2: Create the Script (UPDATED V2)
@@ -103,9 +103,9 @@ function calculateStatsFromLogs() {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return getDefaultStats(); // Only header or empty
 
-  // Read all logs (Column B contains the JSON)
-  // Get Range: Row 2, Col 2 (B), down to last row, 1 column wide
-  var values = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
+  // Read all logs (Column A=Timestamp, Column B=JSON Data)
+  // Get Range: Row 2, Col 1 (A), down to last row, 2 columns wide
+  var values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
   
   var totalReports = 0;
   var totalPop = 0;
@@ -117,7 +117,8 @@ function calculateStatsFromLogs() {
   // usage: Iterate backwards to get recent logs first
   for (var i = values.length - 1; i >= 0; i--) {
     try {
-      var jsonStr = values[i][0];
+      var rowTs = values[i][0];
+      var jsonStr = values[i][1];
       if (!jsonStr) continue;
       
       var entry = JSON.parse(jsonStr);
@@ -131,11 +132,8 @@ function calculateStatsFromLogs() {
 
       // Recent Logs (Limit 50)
       if (recentLogs.length < 50) {
-        // Add timestamp if missing (from row index approx)
-        if (!entry.timestamp) entry.timestamp = new Date().toISOString(); 
-        // Note: Real timestamp is in Col A, but simpler to just use current time 
-        // or rely on client sent time if we were reading Col A too.
-        // Let's rely on client data for simplicity here.
+        // Use row timestamp if payload timestamp is missing.
+        if (!entry.timestamp && rowTs) entry.timestamp = new Date(rowTs).toISOString();
         recentLogs.push(entry);
       }
 
@@ -198,11 +196,12 @@ function updateStatsSheet() {
 6.  **COPY the URL**.
 
 ## Phase 4: Connect App
-1.  Open your project file: `services/analyticsService.ts`.
-2.  Update the variable at the top:
-    ```typescript
-    const GOOGLE_SCRIPT_URL = 'YOUR_NEW_COPIED_URL';
+1.  In your project root, create a `.env` file.
+2.  Add:
+    ```bash
+    VITE_GOOGLE_SCRIPT_URL='YOUR_NEW_COPIED_URL'
     ```
+3.  Restart the dev server after updating `.env`.
 
 ## Troubleshooting: "Forbidden (403)" Error?
 If you see `403 Forbidden` in your console, it means the script is blocking you.
@@ -215,4 +214,4 @@ This **ALWAYS** happens for one reason:
 2.  **Deploy > New deployment** (You MUST create a new one, editing does not work reliably).
 3.  Set **Who has access** to **`Anyone`**.
 4.  Click **Deploy**.
-5.  **Copy the NEW URL** (it changes every time!) and update line 6 in `services/analyticsService.ts`.
+5.  **Copy the NEW URL** (it changes every time!) and update `VITE_GOOGLE_SCRIPT_URL` in `.env`.

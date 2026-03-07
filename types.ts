@@ -225,3 +225,11 @@ export interface DashboardStats {
   solarWinRate: number; // %
   recentLogs: ReportLog[];
 }
+
+export type AnalyticsSourceStatus = 'ok' | 'degraded' | 'error';
+
+export interface DashboardStatsResponse {
+  stats: DashboardStats;
+  sourceStatus: AnalyticsSourceStatus;
+  message?: string;
+}

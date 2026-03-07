@@ -1,24 +1,22 @@
 
 import React, { useEffect, useState } from 'react';
-import { DashboardStats } from '../types';
+import type { AnalyticsSourceStatus, DashboardStats } from '../types';
 import { AnalyticsService } from '../services/analyticsService';
 import { PieChart, Pie, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Users, DollarSign, Clock, FileText, MapPin, Database, RefreshCcw, AlertCircle } from 'lucide-react';
+import { Users, DollarSign, Clock, FileText, Database, RefreshCcw, AlertCircle } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [sourceStatus, setSourceStatus] = useState<AnalyticsSourceStatus>('ok');
+  const [statusMessage, setStatusMessage] = useState('');
 
   const loadStats = async () => {
     setLoading(true);
-    setError(false);
-    try {
-        const data = await AnalyticsService.getDashboardStats();
-        setStats(data);
-    } catch (e) {
-        setError(true);
-    }
+    const result = await AnalyticsService.getDashboardStats();
+    setStats(result.stats);
+    setSourceStatus(result.sourceStatus);
+    setStatusMessage(result.message || '');
     setLoading(false);
   };
 
@@ -26,14 +24,14 @@ export const Dashboard: React.FC = () => {
     loadStats();
   }, []);
 
-  if (loading) return <div className="p-12 text-center text-gray-500 flex flex-col items-center"><RefreshCcw className="w-8 h-8 animate-spin mb-4"/>Loading Server Data...</div>;
+  if (loading) return <div className="p-12 text-center text-gray-500 flex flex-col items-center"><RefreshCcw className="w-8 h-8 animate-spin mb-4"/>Loading analytics data...</div>;
 
   // Show friendly empty state if no stats or error
-  if (!stats || error) return (
+  if (!stats || sourceStatus === 'error') return (
       <div className="p-12 text-center text-gray-500 flex flex-col items-center bg-white rounded-xl border border-dashed border-gray-300 m-4">
           <AlertCircle className="w-12 h-12 mb-4 text-orange-400"/>
           <h3 className="text-lg font-bold text-gray-900">Could not load analytics</h3>
-          <p className="max-w-md mx-auto mb-4">Ensure the Flask backend is running (`python app.py`) on port 5000 to save and view reports.</p>
+          <p className="max-w-md mx-auto mb-4">{statusMessage || 'Analytics backend is not configured.'}</p>
           <button onClick={loadStats} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition">Retry Connection</button>
       </div>
   );
@@ -57,7 +55,7 @@ export const Dashboard: React.FC = () => {
         <div className="flex justify-between items-center bg-slate-800 p-6 rounded-xl text-white shadow-lg">
             <div>
                 <h2 className="text-2xl font-bold flex items-center gap-2"><Database className="w-6 h-6"/> Usage Analytics Dashboard</h2>
-                <p className="text-slate-300">Live data from server CSV log.</p>
+                <p className="text-slate-300">Live data from Google Sheets backend.</p>
             </div>
             <button 
                 onClick={loadStats}
@@ -67,6 +65,12 @@ export const Dashboard: React.FC = () => {
             </button>
         </div>
 
+        {sourceStatus !== 'ok' && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-4 py-3 text-sm">
+                <strong>Analytics degraded:</strong> {statusMessage || 'Using fallback empty values.'}
+            </div>
+        )}
+
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
@@ -75,7 +79,7 @@ export const Dashboard: React.FC = () => {
                     <FileText className="w-5 h-5 text-blue-500"/>
                 </div>
                 <div className="text-3xl font-bold text-gray-900">{stats.totalReports}</div>
-                <div className="text-xs text-green-600 font-medium mt-1">Total Logs in CSV</div>
+                <div className="text-xs text-green-600 font-medium mt-1">Total logged analyses</div>
             </div>
 
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">

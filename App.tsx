@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { CostInput } from './components/CostInput';
 import { Charts } from './components/Charts';
 import { SiteMap } from './components/SiteMap';
@@ -9,16 +9,18 @@ import { SplashScreen } from './components/SplashScreen';
 import { useProjectState } from './hooks/useProjectState';
 import { AnalyticsService } from './services/analyticsService';
 import { Droplets, Map as MapIcon, ClipboardList, TrendingUp, Database, Info, Search, Layers, Settings, CheckCircle, Settings as SettingsIcon, Timer, Heart, DollarSign, Coins, Activity, Download, RotateCcw, Zap, MessageSquare, RefreshCw } from 'lucide-react';
+import { APP_NOTICE_EVENT, notifyApp } from './utils/notifications';
+import type { AppNotice } from './utils/notifications';
 // @ts-ignore - html2pdf types are not perfect
 import html2pdf from 'html2pdf.js';
 const App: React.FC = () => {
     const {
         activeTab, setActiveTab,
-        mapResetKey, setMapResetKey,
+        mapResetKey,
         showSplash, setShowSplash,
         showFeedback, setShowFeedback,
         feedbackText, setFeedbackText,
-        isSubmittingFeedback, setIsSubmittingFeedback,
+        isSubmittingFeedback,
         handleFeedbackSubmit,
         projectDetails, setProjectDetails,
         global, setGlobal,
@@ -27,8 +29,6 @@ const App: React.FC = () => {
         revenue, setRevenue,
         benefits, setBenefits,
         additionalBenefits, setAdditionalBenefits,
-        layout,
-        autoScaleSolar,
         designApplied,
         hydraulicInputs, setHydraulicInputs,
         systemSpecs,
@@ -46,14 +46,53 @@ const App: React.FC = () => {
         yearlyData,
         summary,
         handpumpsNeeded,
-        runSimulation
+        runSimulation,
+        resetProject
     } = useProjectState();
+    const [notices, setNotices] = useState<AppNotice[]>([]);
+
+    useEffect(() => {
+        const onNotice = (event: Event) => {
+            const detail = (event as CustomEvent<AppNotice>).detail;
+            if (!detail || !detail.message) return;
+            setNotices(prev => [...prev, detail]);
+            const id = detail.id;
+            window.setTimeout(() => {
+                if (!id) return;
+                setNotices(prev => prev.filter(item => item.id !== id));
+            }, 5000);
+        };
+
+        window.addEventListener(APP_NOTICE_EVENT, onNotice);
+        return () => window.removeEventListener(APP_NOTICE_EVENT, onNotice);
+    }, []);
+
+    const waitForReportReady = async (element: HTMLElement) => {
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+
+        const waitForImages = (nodes: HTMLImageElement[], timeoutMs: number) => Promise.race([
+            Promise.all(nodes.map(node => {
+                if (node.complete) return Promise.resolve();
+                return new Promise<void>(resolve => {
+                    node.addEventListener('load', () => resolve(), { once: true });
+                    node.addEventListener('error', () => resolve(), { once: true });
+                });
+            })),
+            new Promise<void>(resolve => setTimeout(() => resolve(), timeoutMs))
+        ]);
+
+        const regularImages = Array.from(element.querySelectorAll('img'));
+        const leafletTiles = Array.from(element.querySelectorAll('.leaflet-tile')) as HTMLImageElement[];
+        await waitForImages(regularImages, 2500);
+        await waitForImages(leafletTiles, 2500);
+    };
 
     const generatePDF = async (elementId: string, filename: string) => {
         setIsDownloadingPdf(true);
 
         // --- Analytics Logging ---
-        AnalyticsService.logReport({
+        const logged = await AnalyticsService.logReport({
             siteName: projectDetails.siteName,
             contractNumber: projectDetails.contractNumber,
             location: systemGeometry ? systemGeometry.center : { lat: 0, lng: 0 },
@@ -66,39 +105,42 @@ const App: React.FC = () => {
             handpumpNetValue: summary.netEconomicValueHandpump,
             winner: summary.netEconomicValueSolar > summary.netEconomicValueHandpump ? 'Solar' : 'Handpump'
         });
+        if (!logged) {
+            notifyApp({ type: "warning", message: "Report was generated, but analytics logging failed." });
+        }
         // -------------------------
 
-        // Ensure state propagates and elements become visible
-        setTimeout(async () => {
-            const element = document.getElementById(elementId);
-            if (!element) {
-                console.error(`Element ${elementId} not found`);
-                setIsDownloadingPdf(false);
-                return;
-            }
+        const element = document.getElementById(elementId);
+        if (!element) {
+            console.error(`Element ${elementId} not found`);
+            notifyApp({ type: "error", message: "PDF export target was not found." });
+            setIsDownloadingPdf(false);
+            return;
+        }
 
-            const opt = {
-                margin: [5, 5, 5, 5],
-                filename: filename,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true, logging: true, allowTaint: true },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-            };
+        const opt = {
+            margin: [5, 5, 5, 5],
+            filename: filename,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, logging: true, allowTaint: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
 
-            try {
-                if (html2pdf) {
-                    await html2pdf().set(opt).from(element).save();
-                } else {
-                    alert("PDF Generator library not loaded.");
-                }
-            } catch (e) {
-                console.error("PDF Gen Error", e);
-                alert("Failed to generate PDF. Please check the console for errors.");
-            } finally {
-                setIsDownloadingPdf(false);
+        try {
+            await waitForReportReady(element);
+            if (html2pdf) {
+                await html2pdf().set(opt).from(element).save();
+                notifyApp({ type: "success", message: "Report downloaded successfully." });
+            } else {
+                notifyApp({ type: "error", message: "PDF generator library was not loaded." });
             }
-        }, 2500); // Wait for Map Tiles to render
+        } catch (e) {
+            console.error("PDF Gen Error", e);
+            notifyApp({ type: "error", message: "Failed to generate PDF. Please check logs and retry." });
+        } finally {
+            setIsDownloadingPdf(false);
+        }
     };
 
     return (
@@ -128,7 +170,7 @@ const App: React.FC = () => {
                             <button onClick={() => setShowFeedback(true)} className="px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition text-slate-300 hover:bg-slate-800" title="Send Feedback">
                                 <MessageSquare className="w-4 h-4" /> Feedback
                             </button>
-                            <button onClick={() => window.location.reload()} className="px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition text-slate-300 hover:bg-slate-800" title="Start New Analysis">
+                            <button onClick={resetProject} className="px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition text-slate-300 hover:bg-slate-800" title="Start New Analysis">
                                 <RefreshCw className="w-4 h-4" /> New Analysis
                             </button>
                             <button onClick={() => setActiveTab('map')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition ${activeTab === 'map' ? 'bg-[#1CABE2] text-white' : 'text-slate-300 hover:bg-slate-800'}`}><MapIcon className="w-4 h-4" /> Design Map</button>
@@ -205,9 +247,9 @@ const App: React.FC = () => {
                         <div className="space-y-6" data-html2canvas-ignore="true">
                             <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
                                 <div className="flex items-center gap-2 mb-4 text-slate-800"><SettingsIcon className="w-5 h-5" /><h2 className="font-bold">Global Parameters</h2></div>
-                                <CostInput label="Discount Rate" value={global.discountRate} onChange={(v) => setGlobal({ ...global, discountRate: v })} unit="%" />
-                                <CostInput label="Project Lifespan" value={global.projectLifespan} onChange={(v) => setGlobal({ ...global, projectLifespan: v })} unit="years" />
-                                <CostInput label="Pop. Growth Rate" value={global.populationGrowthRate} onChange={(v) => setGlobal({ ...global, populationGrowthRate: v })} unit="%" step={0.1} />
+                                <CostInput label="Discount Rate" value={global.discountRate} onChange={(v) => setGlobal({ ...global, discountRate: v })} unit="%" min={0} max={100} />
+                                <CostInput label="Project Lifespan" value={global.projectLifespan} onChange={(v) => setGlobal({ ...global, projectLifespan: v })} unit="years" min={1} max={100} />
+                                <CostInput label="Pop. Growth Rate" value={global.populationGrowthRate} onChange={(v) => setGlobal({ ...global, populationGrowthRate: v })} unit="%" step={0.1} min={0} max={25} />
                                 <div className="mt-2 text-xs bg-gray-50 p-2 rounded border border-gray-100">
                                     <span className="font-bold text-gray-500">Design Population (Yr {global.projectLifespan}):</span>
                                     <div className="text-lg font-bold text-gray-800">{finalDesignPopulation.toLocaleString()}</div>
@@ -216,14 +258,14 @@ const App: React.FC = () => {
 
                             <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
                                 <div className="flex items-center gap-2 mb-4 text-slate-800"><Timer className="w-5 h-5" /><h2 className="font-bold">Time & Health Inputs</h2></div>
-                                <CostInput label="Hourly Wage (Opp. Cost)" value={benefits.hourlyWage} onChange={(v) => setBenefits({ ...benefits, hourlyWage: v })} unit="$/hr" step={0.05} />
+                                <CostInput label="Hourly Wage (Opp. Cost)" value={benefits.hourlyWage} onChange={(v) => setBenefits({ ...benefits, hourlyWage: v })} unit="$/hr" step={0.05} min={0} />
                                 <div className="border-t pt-2 mt-2">
                                     <h3 className="text-xs font-bold text-gray-400 uppercase mb-2">Collection Time (Round Trip)</h3>
-                                    <CostInput label="Status Quo (River/Well)" value={benefits.timeSpentBaseline} onChange={(v) => setBenefits({ ...benefits, timeSpentBaseline: v })} unit="min/day" helpText="Baseline 'No Water' Scenario" />
-                                    <CostInput label="Handpump (Walk+Queue)" value={benefits.timeSpentHandpump} onChange={(v) => setBenefits({ ...benefits, timeSpentHandpump: v })} unit="min/day" />
-                                    <CostInput label="Solar Piped (At Tap)" value={benefits.timeSpentSolar} onChange={(v) => setBenefits({ ...benefits, timeSpentSolar: v })} unit="min/day" />
+                                    <CostInput label="Status Quo (River/Well)" value={benefits.timeSpentBaseline} onChange={(v) => setBenefits({ ...benefits, timeSpentBaseline: v })} unit="min/day" helpText="Baseline 'No Water' Scenario" min={0} max={1440} />
+                                    <CostInput label="Handpump (Walk+Queue)" value={benefits.timeSpentHandpump} onChange={(v) => setBenefits({ ...benefits, timeSpentHandpump: v })} unit="min/day" min={0} max={1440} />
+                                    <CostInput label="Solar Piped (At Tap)" value={benefits.timeSpentSolar} onChange={(v) => setBenefits({ ...benefits, timeSpentSolar: v })} unit="min/day" min={0} max={1440} />
                                 </div>
-                                <div className="border-t pt-2 mt-2"><h3 className="text-xs font-bold text-gray-400 uppercase mb-2">Health Value (Monetized)</h3><CostInput label="Solar Health Premium" value={benefits.healthPremiumSolar} onChange={(v) => setBenefits({ ...benefits, healthPremiumSolar: v })} unit="$/pp/yr" /><CostInput label="Handpump Health Value" value={benefits.healthPremiumHandpump} onChange={(v) => setBenefits({ ...benefits, healthPremiumHandpump: v })} unit="$/pp/yr" /></div>
+                                <div className="border-t pt-2 mt-2"><h3 className="text-xs font-bold text-gray-400 uppercase mb-2">Health Value (Monetized)</h3><CostInput label="Solar Health Premium" value={benefits.healthPremiumSolar} onChange={(v) => setBenefits({ ...benefits, healthPremiumSolar: v })} unit="$/pp/yr" min={0} /><CostInput label="Handpump Health Value" value={benefits.healthPremiumHandpump} onChange={(v) => setBenefits({ ...benefits, healthPremiumHandpump: v })} unit="$/pp/yr" min={0} /></div>
                             </div>
 
                             {/* Additional Benefits Values (Driven by Map) */}
@@ -233,10 +275,10 @@ const App: React.FC = () => {
                                     Add Schools, Clinics, Gardens, or Grids in the <strong>Design Map</strong> to enable these benefits.
                                 </div>
                                 <div className="space-y-3">
-                                    {systemSpecs && systemSpecs.countSchools > 0 && <div className="pl-2 border-l-2 border-purple-200"><div className="flex justify-between text-sm font-medium mb-1"><span>Schools ({systemSpecs.countSchools})</span></div><CostInput label="Value per School/Yr" value={additionalBenefits.valueSchool} onChange={(v) => setAdditionalBenefits({ ...additionalBenefits, valueSchool: v })} unit="$" /></div>}
-                                    {systemSpecs && systemSpecs.countClinics > 0 && <div className="pl-2 border-l-2 border-purple-200"><div className="flex justify-between text-sm font-medium mb-1"><span>Clinics ({systemSpecs.countClinics})</span></div><CostInput label="Value per Clinic/Yr" value={additionalBenefits.valueClinic} onChange={(v) => setAdditionalBenefits({ ...additionalBenefits, valueClinic: v })} unit="$" /></div>}
-                                    {systemSpecs && systemSpecs.countGardens > 0 && <div className="pl-2 border-l-2 border-purple-200"><div className="flex justify-between text-sm font-medium mb-1"><span>Gardens ({systemSpecs.countGardens})</span></div><CostInput label="Value per Garden/Yr" value={additionalBenefits.valueGarden} onChange={(v) => setAdditionalBenefits({ ...additionalBenefits, valueGarden: v })} unit="$" /></div>}
-                                    {systemSpecs && systemSpecs.hasGrid && <div className="pl-2 border-l-2 border-purple-200"><div className="flex justify-between text-sm font-medium mb-1"><span>Energy Access</span></div><CostInput label="Value of Energy/Yr" value={additionalBenefits.valueEnergy} onChange={(v) => setAdditionalBenefits({ ...additionalBenefits, valueEnergy: v })} unit="$" /></div>}
+                                    {systemSpecs && systemSpecs.countSchools > 0 && <div className="pl-2 border-l-2 border-purple-200"><div className="flex justify-between text-sm font-medium mb-1"><span>Schools ({systemSpecs.countSchools})</span></div><CostInput label="Value per School/Yr" value={additionalBenefits.valueSchool} onChange={(v) => setAdditionalBenefits({ ...additionalBenefits, valueSchool: v })} unit="$" min={0} /></div>}
+                                    {systemSpecs && systemSpecs.countClinics > 0 && <div className="pl-2 border-l-2 border-purple-200"><div className="flex justify-between text-sm font-medium mb-1"><span>Clinics ({systemSpecs.countClinics})</span></div><CostInput label="Value per Clinic/Yr" value={additionalBenefits.valueClinic} onChange={(v) => setAdditionalBenefits({ ...additionalBenefits, valueClinic: v })} unit="$" min={0} /></div>}
+                                    {systemSpecs && systemSpecs.countGardens > 0 && <div className="pl-2 border-l-2 border-purple-200"><div className="flex justify-between text-sm font-medium mb-1"><span>Gardens ({systemSpecs.countGardens})</span></div><CostInput label="Value per Garden/Yr" value={additionalBenefits.valueGarden} onChange={(v) => setAdditionalBenefits({ ...additionalBenefits, valueGarden: v })} unit="$" min={0} /></div>}
+                                    {systemSpecs && systemSpecs.hasGrid && <div className="pl-2 border-l-2 border-purple-200"><div className="flex justify-between text-sm font-medium mb-1"><span>Energy Access</span></div><CostInput label="Value of Energy/Yr" value={additionalBenefits.valueEnergy} onChange={(v) => setAdditionalBenefits({ ...additionalBenefits, valueEnergy: v })} unit="$" min={0} /></div>}
                                     {(!systemSpecs || (systemSpecs.countSchools === 0 && systemSpecs.countClinics === 0 && systemSpecs.countGardens === 0 && !systemSpecs.hasGrid)) && <div className="text-sm text-gray-400 italic text-center py-2">No institutions added on map.</div>}
                                 </div>
                             </div>
@@ -245,8 +287,8 @@ const App: React.FC = () => {
                             <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
                                 <div className="flex items-center gap-2 mb-4 text-slate-800"><DollarSign className="w-5 h-5" /><h2 className="font-bold">Financial Assumptions</h2></div>
                                 <div className="space-y-4">
-                                    <div><h3 className="text-xs font-bold text-gray-400 uppercase mb-2">Solar Piped</h3><CostInput label="OpEx (Annual)" value={solar.opexAnnual} onChange={(v) => setSolar({ ...solar, opexAnnual: v })} unit="$" /><CostInput label="Replacements (Inv/Pump)" value={solar.replacementCost} onChange={(v) => setSolar({ ...solar, replacementCost: v })} unit="$" /><CostInput label="Theft Probability" value={solar.theftProbability} onChange={(v) => setSolar({ ...solar, theftProbability: v })} unit="%" /></div>
-                                    <div className="border-t pt-2"><h3 className="text-xs font-bold text-gray-400 uppercase mb-2">Handpumps</h3><CostInput label="CapEx (Per Unit)" value={handpump.capexPerUnit} onChange={(v) => setHandpump({ ...handpump, capexPerUnit: v })} unit="$" /><CostInput label="OpEx (Per Unit/Yr)" value={handpump.opexAnnualPerUnit} onChange={(v) => setHandpump({ ...handpump, opexAnnualPerUnit: v })} unit="$" /></div>
+                                    <div><h3 className="text-xs font-bold text-gray-400 uppercase mb-2">Solar Piped</h3><CostInput label="OpEx (Annual)" value={solar.opexAnnual} onChange={(v) => setSolar({ ...solar, opexAnnual: v })} unit="$" min={0} /><CostInput label="Replacements (Inv/Pump)" value={solar.replacementCost} onChange={(v) => setSolar({ ...solar, replacementCost: v })} unit="$" min={0} /><CostInput label="Theft Probability" value={solar.theftProbability} onChange={(v) => setSolar({ ...solar, theftProbability: v })} unit="%" min={0} max={100} /></div>
+                                    <div className="border-t pt-2"><h3 className="text-xs font-bold text-gray-400 uppercase mb-2">Handpumps</h3><CostInput label="CapEx (Per Unit)" value={handpump.capexPerUnit} onChange={(v) => setHandpump({ ...handpump, capexPerUnit: v })} unit="$" min={0} /><CostInput label="OpEx (Per Unit/Yr)" value={handpump.opexAnnualPerUnit} onChange={(v) => setHandpump({ ...handpump, opexAnnualPerUnit: v })} unit="$" min={0} /></div>
                                 </div>
                             </div>
 
@@ -255,18 +297,18 @@ const App: React.FC = () => {
                                 <div className="flex items-center gap-2 mb-4 text-slate-800"><Coins className="w-5 h-5" /><h2 className="font-bold">Revenue & Subsidies</h2></div>
                                 <div className="mb-4">
                                     <h3 className="text-xs font-bold text-gray-400 uppercase mb-2">Solar Piped</h3>
-                                    <CostInput label="Tariff (Per HH/Mo)" value={revenue.tariffSolarPerMonth} onChange={(v) => setRevenue({ ...revenue, tariffSolarPerMonth: v })} unit="$" step={0.1} />
-                                    <CostInput label="Collection Efficiency" value={revenue.collectionEfficiencySolar} onChange={(v) => setRevenue({ ...revenue, collectionEfficiencySolar: v })} unit="%" />
+                                    <CostInput label="Tariff (Per HH/Mo)" value={revenue.tariffSolarPerMonth} onChange={(v) => setRevenue({ ...revenue, tariffSolarPerMonth: v })} unit="$" step={0.1} min={0} />
+                                    <CostInput label="Collection Efficiency" value={revenue.collectionEfficiencySolar} onChange={(v) => setRevenue({ ...revenue, collectionEfficiencySolar: v })} unit="%" min={0} max={100} />
                                     <div className="mt-3 pt-3 border-t border-gray-100">
                                         <h4 className="text-xs font-bold text-blue-600 uppercase mb-2">External Support</h4>
-                                        <CostInput label="Carbon Credit Price" value={revenue.carbonCreditPricePerM3} onChange={(v) => setRevenue({ ...revenue, carbonCreditPricePerM3: v })} unit="$/m³" step={0.01} />
-                                        <CostInput label="Govt Subsidy (Top-up)" value={revenue.govtSubsidyFraction} onChange={(v) => setRevenue({ ...revenue, govtSubsidyFraction: v })} unit="% of Tariff" />
+                                        <CostInput label="Carbon Credit Price" value={revenue.carbonCreditPricePerM3} onChange={(v) => setRevenue({ ...revenue, carbonCreditPricePerM3: v })} unit="$/m³" step={0.01} min={0} />
+                                        <CostInput label="Govt Subsidy (Top-up)" value={revenue.govtSubsidyFraction} onChange={(v) => setRevenue({ ...revenue, govtSubsidyFraction: v })} unit="% of Tariff" min={0} max={100} />
                                     </div>
                                 </div>
                                 <div className="border-t pt-2">
                                     <h3 className="text-xs font-bold text-gray-400 uppercase mb-2">Handpumps</h3>
-                                    <CostInput label="Tariff (Per HH/Mo)" value={revenue.tariffHandpumpPerMonth || 0} onChange={(v) => setRevenue({ ...revenue, tariffHandpumpPerMonth: v })} unit="$" step={0.1} />
-                                    <CostInput label="Collection Efficiency" value={revenue.collectionEfficiencyHandpump} onChange={(v) => setRevenue({ ...revenue, collectionEfficiencyHandpump: v })} unit="%" />
+                                    <CostInput label="Tariff (Per HH/Mo)" value={revenue.tariffHandpumpPerMonth || 0} onChange={(v) => setRevenue({ ...revenue, tariffHandpumpPerMonth: v })} unit="$" step={0.1} min={0} />
+                                    <CostInput label="Collection Efficiency" value={revenue.collectionEfficiencyHandpump} onChange={(v) => setRevenue({ ...revenue, collectionEfficiencyHandpump: v })} unit="%" min={0} max={100} />
                                 </div>
                             </div>
                         </div>
@@ -370,6 +412,23 @@ const App: React.FC = () => {
             </main>
 
             {/* Persistent Feedback Modal */}
+            <div className="fixed top-4 right-4 z-[3000] space-y-2 w-[90vw] max-w-sm pointer-events-none">
+                {notices.map(notice => (
+                    <div
+                        key={notice.id}
+                        className={`pointer-events-auto rounded-lg border px-4 py-3 shadow-lg text-sm ${notice.type === 'success'
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                            : notice.type === 'error'
+                                ? 'bg-red-50 border-red-200 text-red-900'
+                                : notice.type === 'warning'
+                                    ? 'bg-amber-50 border-amber-200 text-amber-900'
+                                    : 'bg-blue-50 border-blue-200 text-blue-900'
+                            }`}
+                    >
+                        {notice.message}
+                    </div>
+                ))}
+            </div>
             {
                 showFeedback && (
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">

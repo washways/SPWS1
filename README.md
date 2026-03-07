@@ -69,7 +69,15 @@ The tool guides the user through a full design workflow—from spatial planning 
     ```bash
     npm install
     ```
-3.  **Run locally**:
+3.  **Configure analytics backend URL**:
+    ```bash
+    # PowerShell
+    copy .env.example .env
+    # or Bash
+    cp .env.example .env
+    ```
+    Then set `VITE_GOOGLE_SCRIPT_URL` in `.env`.
+4.  **Run locally**:
     ```bash
     npm run dev
     ```
@@ -86,7 +94,7 @@ The application requires a connection to a Google Apps Script to log data. If yo
 1.  Create a new Google Sheet.
 2.  Add the provided script.
 3.  Deploy as a Web App (Access: **Anyone**).
-4.  Update `GOOGLE_SCRIPT_URL` in `src/services/analyticsService.ts`.
+4.  Set `VITE_GOOGLE_SCRIPT_URL` in your `.env` file to your Apps Script Web App URL.
 
 ---
 

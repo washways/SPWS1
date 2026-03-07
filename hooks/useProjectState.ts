@@ -3,6 +3,21 @@ import { DEFAULT_GLOBAL, DEFAULT_HANDPUMP, DEFAULT_SOLAR, DEFAULT_BENEFITS, DEFA
 import { GlobalParams, HandpumpParams, SolarSystemParams, BenefitsParams, VillageLayout, SimulationResult, AdditionalBenefitsParams, RevenueParams, HydraulicInputs, SystemSpecs, BoQItem, PipelineProfile, SystemGeometry, ProjectDetails } from '../types';
 import { AnalyticsService } from '../services/analyticsService';
 import { calculateNPV, runMonteCarloSimulation } from '../utils/calculations';
+import { notifyApp } from '../utils/notifications';
+
+const DEFAULT_HYDRAULIC_INPUTS: HydraulicInputs = {
+    boreholeDepth: 60,
+    staticWaterLevel: 25,
+    elevationDifference: 15,
+    tankHeight: 6,
+    pipeLength: 0,
+    dailyDemandPerCapita: 30,
+    peakSunHours: 5.5,
+    pumpEfficiency: 0.6,
+    frictionLossFactor: 0.08,
+    boreholeElevation: undefined,
+    tankElevation: undefined
+};
 
 export const useProjectState = () => {
     // --- View State ---
@@ -30,9 +45,7 @@ export const useProjectState = () => {
     const [designApplied, setDesignApplied] = useState(false);
 
     // Lifted Engineering State
-    const [hydraulicInputs, setHydraulicInputs] = useState<HydraulicInputs>({
-        boreholeDepth: 60, staticWaterLevel: 25, elevationDifference: 15, tankHeight: 6, pipeLength: 0, dailyDemandPerCapita: 30, peakSunHours: 5.5, pumpEfficiency: 0.6, frictionLossFactor: 0.08, boreholeElevation: undefined, tankElevation: undefined
-    });
+    const [hydraulicInputs, setHydraulicInputs] = useState<HydraulicInputs>(DEFAULT_HYDRAULIC_INPUTS);
     const [systemSpecs, setSystemSpecs] = useState<SystemSpecs | null>(null);
     const [generatedBoQ, setGeneratedBoQ] = useState<BoQItem[]>([]);
     const [pipelineProfiles, setPipelineProfiles] = useState<PipelineProfile[]>([]);
@@ -90,15 +103,45 @@ export const useProjectState = () => {
         setIsSubmittingFeedback(true);
         try {
             await AnalyticsService.sendFeedback(feedbackText);
-            alert("Thank you! Your feedback has been recorded.");
+            notifyApp({ type: "success", message: "Thank you. Your feedback has been recorded." });
             setFeedbackText("");
             setShowFeedback(false);
         } catch (e) {
-            alert("Error sending feedback. Please check your internet connection.");
+            notifyApp({ type: "error", message: "Feedback failed to send. Please check your connection and backend setup." });
         } finally {
             setIsSubmittingFeedback(false);
         }
     };
+
+    const resetProject = useCallback(() => {
+        setActiveTab('map');
+        setMapResetKey(prev => prev + 1);
+        setShowSplash(true);
+        setShowFeedback(false);
+        setFeedbackText("");
+        setIsSubmittingFeedback(false);
+        setProjectDetails({ siteName: '', contractNumber: '' });
+        setGlobal(DEFAULT_GLOBAL);
+        setSolar(DEFAULT_SOLAR);
+        setHandpump(DEFAULT_HANDPUMP);
+        setRevenue(DEFAULT_REVENUE);
+        setBenefits(DEFAULT_BENEFITS);
+        setAdditionalBenefits(DEFAULT_ADDITIONAL_BENEFITS);
+        setLayout('compact');
+        setAutoScaleSolar(true);
+        setDesignApplied(false);
+        setHydraulicInputs(DEFAULT_HYDRAULIC_INPUTS);
+        setSystemSpecs(null);
+        setGeneratedBoQ([]);
+        setPipelineProfiles([]);
+        setSystemGeometry(null);
+        setSimMetric('economic');
+        setSimulationResult(null);
+        setIsSimulating(false);
+        setIsDownloadingPdf(false);
+        AnalyticsService.startSession();
+        notifyApp({ type: "info", message: "Started a new analysis session." });
+    }, []);
 
     // --- Calculations ---
 
@@ -156,6 +199,7 @@ export const useProjectState = () => {
         yearlyData,
         summary,
         handpumpsNeeded,
-        runSimulation
+        runSimulation,
+        resetProject
     };
 };
