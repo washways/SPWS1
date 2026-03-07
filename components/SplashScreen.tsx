@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquare, Activity, Sun, TrendingUp, Settings, FileText, ArrowRight, Send } from 'lucide-react';
+import { MessageSquare, Activity, Sun, TrendingUp, Settings, FileText, ArrowRight, Send, X } from 'lucide-react';
 
 interface SplashScreenProps {
     showSplash: boolean;
@@ -27,11 +27,19 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
     if (!showSplash) return null;
 
     return (
-        <div className="fixed inset-0 flex items-center justify-center bg-[#003E5E]/95 backdrop-blur-sm text-white px-4" style={{ zIndex }}>
-            <div className="max-w-3xl w-full bg-white text-slate-800 rounded-2xl shadow-2xl border border-slate-200 p-8 text-center relative overflow-hidden animate-in fade-in zoom-in duration-300">
+        <div className="fixed inset-0 flex items-start sm:items-center justify-center bg-[#003E5E]/95 backdrop-blur-sm text-white px-4 py-4 sm:py-6" style={{ zIndex }}>
+            <div className="max-w-xl w-full max-h-[85vh] bg-white text-slate-800 rounded-2xl shadow-2xl border border-slate-200 p-4 md:p-5 text-center relative overflow-y-auto animate-in fade-in zoom-in duration-300">
                 {/* Decorative background element */}
                 {/* Decorative background element */}
                 <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#1CABE2] via-[#003E5E] to-[#1CABE2]"></div>
+                <button
+                    onClick={() => setShowSplash(false)}
+                    className="absolute top-3 right-3 p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition"
+                    aria-label="Close splash screen"
+                    title="Close"
+                >
+                    <X className="w-4 h-4" />
+                </button>
 
                 {showFeedback ? (
                     <div className="text-left animate-in slide-in-from-right duration-300">
@@ -60,19 +68,19 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
                     </div>
                 ) : (
                     <>
-                        <div className="flex justify-center mb-6">
+                        <div className="flex justify-center mb-3">
                             <div className="bg-[#1CABE2] p-4 rounded-2xl shadow-lg shadow-[#1CABE2]/20">
                                 <Activity className="w-12 h-12 text-white" />
                             </div>
                         </div>
 
-                        <div className="inline-block px-3 py-1 bg-amber-500/20 text-amber-300 rounded-full text-xs font-bold uppercase tracking-wider mb-4 border border-amber-500/50">
+                        <div className="inline-block px-3 py-1 bg-amber-500/20 text-amber-300 rounded-full text-xs font-bold uppercase tracking-wider mb-3 border border-amber-500/50">
                             v2.1 Experimental Tool
                         </div>
 
-                        <h1 className="text-3xl md:text-4xl font-bold mb-4 tracking-tight text-[#003E5E]">Rural Water Supply <span className="text-[#1CABE2]">Economic Analyzer</span></h1>
+                        <h1 className="text-xl md:text-2xl font-bold mb-3 tracking-tight text-[#003E5E]">Rural Water Supply <span className="text-[#1CABE2]">Economic Analyzer</span></h1>
 
-                        <div className="space-y-4 text-left bg-slate-50 p-6 rounded-xl border border-slate-200 mb-8">
+                        <div className="space-y-4 text-left bg-slate-50 p-3 md:p-4 rounded-xl border border-slate-200 mb-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="flex gap-3">
                                     <div className="mt-1 bg-[#1CABE2]/10 p-1.5 rounded text-[#1CABE2]"><Sun className="w-4 h-4" /></div>
@@ -134,16 +142,16 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
                             </div>
                         </div>
 
-                        <div className="flex flex-col md:flex-row gap-4 justify-center">
+                        <div className="sticky bottom-0 pt-3 bg-white/95 backdrop-blur-sm flex flex-col md:flex-row gap-3 justify-center">
                             <button
                                 onClick={() => setShowSplash(false)}
-                                className="px-8 py-3 bg-[#1CABE2] hover:bg-[#1597c9] text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-[#1CABE2]/25 flex items-center justify-center gap-2 text-lg group"
+                                className="px-6 py-2.5 bg-[#1CABE2] hover:bg-[#1597c9] text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-[#1CABE2]/25 flex items-center justify-center gap-2 text-base group"
                             >
                                 Start Analysis <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                             </button>
                             <button
                                 onClick={() => setShowFeedback(true)}
-                                className="px-6 py-3 bg-white hover:bg-gray-50 text-slate-600 font-medium rounded-xl transition-all border border-slate-200 flex items-center justify-center gap-2"
+                                className="px-5 py-2.5 bg-white hover:bg-gray-50 text-slate-600 font-medium rounded-xl transition-all border border-slate-200 flex items-center justify-center gap-2"
                             >
                                 <MessageSquare className="w-4 h-4" /> Leave Feedback
                             </button>
