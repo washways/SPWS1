@@ -6,6 +6,8 @@ import { BoQItem, HydraulicInputs, SystemSpecs, PipelineProfile, SystemGeometry,
 import { FileText, Activity, AlertTriangle, Map as MapIcon, ClipboardCheck, Droplets, Download } from 'lucide-react';
 import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart, ReferenceLine, Legend, Bar } from 'recharts';
 import { notifyApp } from '../utils/notifications';
+// @ts-ignore - html2pdf types are not perfect
+import html2pdf from 'html2pdf.js';
 
 interface SystemSchematicProps {
     inputs: HydraulicInputs;
@@ -52,10 +54,8 @@ export const SystemSchematic: React.FC<SystemSchematicProps> = ({ inputs, specs,
 
         try {
             await waitForRender();
-            // @ts-ignore
-            if (window.html2pdf) {
-                // @ts-ignore
-                await window.html2pdf().set(opt).from(element).save();
+            if (html2pdf) {
+                await html2pdf().set(opt).from(element).save();
                 notifyApp({ type: "success", message: "Technical PDF downloaded successfully." });
             } else {
                 notifyApp({ type: "error", message: "PDF generator library not loaded. Please refresh and retry." });

@@ -1,7 +1,9 @@
 import type { DashboardStats, DashboardStatsResponse, ReportLog } from "../types";
 
 const SESSION_START_KEY = "mw_tool_session_start";
-const GOOGLE_SCRIPT_URL = (import.meta.env.VITE_GOOGLE_SCRIPT_URL || "").trim();
+const DEFAULT_GOOGLE_SCRIPT_URL =
+  "https://script.google.com/macros/s/AKfycby81CUAJylE7mTbvW9mtbP-7E8_ZgxFLt3BoEdJgt0prGduCa0CzhFu2r26O0-KIkJ5/exec";
+const GOOGLE_SCRIPT_URL = (import.meta.env.VITE_GOOGLE_SCRIPT_URL || DEFAULT_GOOGLE_SCRIPT_URL).trim();
 
 const EMPTY_STATS: DashboardStats = {
   totalReports: 0,
@@ -31,23 +33,36 @@ const parseJsonResponse = async (response: Response) => {
 
 const postToScript = async (payload: unknown) => {
   const url = requireScriptUrl();
-  const response = await fetch(url, {
-    method: "POST",
-    // Send as plain text to avoid preflight and keep Apps Script compatibility.
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify(payload),
-  });
+  const body = JSON.stringify(payload);
 
-  if (!response.ok) {
-    throw new Error(`Analytics POST failed: ${response.status} ${response.statusText}`);
+  // Preferred path: verify response.
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Analytics POST failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await parseJsonResponse(response);
+    if (data && typeof data === "object" && "status" in data && data.status !== "success") {
+      throw new Error(data.message || "Analytics backend rejected request.");
+    }
+    return data;
+  } catch (verifiedErr: any) {
+    // Fallback path for Apps Script deployments that do not return CORS-friendly POST responses.
+    console.warn("Analytics POST verify path failed, attempting no-cors fallback.", verifiedErr);
+    await fetch(url, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body,
+    });
+    return { status: "opaque-fallback" };
   }
-
-  const data = await parseJsonResponse(response);
-  if (data && typeof data === "object" && "status" in data && data.status !== "success") {
-    throw new Error(data.message || "Analytics backend rejected request.");
-  }
-
-  return data;
 };
 
 const normalizeRecentLogs = (rawLogs: unknown): ReportLog[] => {
@@ -111,7 +126,7 @@ export const AnalyticsService = {
       return {
         stats: EMPTY_STATS,
         sourceStatus: "error",
-        message: "Analytics URL is not configured. Set VITE_GOOGLE_SCRIPT_URL.",
+        message: "Analytics URL is not configured.",
       };
     }
 
