@@ -25,6 +25,7 @@ type SearchResult = {
     lat: string;
     lon: string;
     display_name: string;
+    boundingbox?: string[];
 };
 
 // --- Helper: Country from Bounds ---
@@ -78,6 +79,7 @@ function getClosestPointOnSegment(p: L.LatLng, a: L.LatLng, b: L.LatLng) {
 export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, projectDetails, setProjectDetails, inputs, setInputs, onUpdateCalc, onApplyDesign }) => {
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const mapInstanceRef = useRef<L.Map | null>(null);
+    const searchSelectionMarkerRef = useRef<L.CircleMarker | null>(null);
     const [mapReady, setMapReady] = useState(false);
 
     const activeToolRef = useRef<ToolType>('select');
@@ -149,10 +151,13 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     // Spatial Analysis State
     const [bufferDistance, setBufferDistance] = useState(50); // meters
     const [peoplePerBuilding, setPeoplePerBuilding] = useState(5);
+    const [schemeExtentKm, setSchemeExtentKm] = useState<number | null>(null);
 
     const osmBuildingLayerRef = useRef<L.LayerGroup | null>(null);
     const visualBufferLayerRef = useRef<L.LayerGroup | null>(null);
     const googleBuildingLayerRef = useRef<L.LayerGroup | null>(null);
+    const schemeGuideLayerRef = useRef<L.LayerGroup | null>(null);
+    const tankGuideCircleRef = useRef<L.Circle | null>(null);
 
     // Create a global SVG renderer to prevent Canvas renderer usage
     const svgRenderer = useRef<L.SVG | null>(null);
@@ -583,7 +588,37 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     // Search Handler
     const selectSearchResult = (result: SearchResult) => {
         if (!mapInstanceRef.current) return;
-        mapInstanceRef.current.flyTo([parseFloat(result.lat), parseFloat(result.lon)], 15, { duration: 1.5 });
+        const map = mapInstanceRef.current;
+        const lat = parseFloat(result.lat);
+        const lon = parseFloat(result.lon);
+
+        if (Array.isArray(result.boundingbox) && result.boundingbox.length === 4) {
+            const south = parseFloat(result.boundingbox[0]);
+            const north = parseFloat(result.boundingbox[1]);
+            const west = parseFloat(result.boundingbox[2]);
+            const east = parseFloat(result.boundingbox[3]);
+            if ([south, north, west, east].every(v => Number.isFinite(v))) {
+                const bounds = L.latLngBounds([south, west], [north, east]);
+                map.fitBounds(bounds.pad(0.3), { maxZoom: 16 });
+            } else {
+                map.flyTo([lat, lon], 16, { duration: 1.5 });
+            }
+        } else {
+            map.flyTo([lat, lon], 16, { duration: 1.5 });
+        }
+
+        if (searchSelectionMarkerRef.current) {
+            searchSelectionMarkerRef.current.remove();
+            searchSelectionMarkerRef.current = null;
+        }
+        searchSelectionMarkerRef.current = L.circleMarker([lat, lon], {
+            radius: 10,
+            color: '#1CABE2',
+            weight: 2,
+            fillColor: '#1CABE2',
+            fillOpacity: 0.2
+        }).addTo(map);
+
         const shortName = result.display_name.split(',')[0];
         setProjectDetails(prev => ({ ...prev, siteName: shortName }));
         setSearchQuery(shortName);
@@ -651,6 +686,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         osmBuildingLayerRef.current = L.layerGroup().addTo(map);
         googleBuildingLayerRef.current = L.layerGroup().addTo(map);
         visualBufferLayerRef.current = L.layerGroup().addTo(map); // Initialize buffer layer here
+        schemeGuideLayerRef.current = L.layerGroup().addTo(map);
 
         setTimeout(() => { map.invalidateSize(); }, 500);
 
@@ -1089,9 +1125,37 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         setAnalysisUpdateTrigger(prev => prev + 1); // Force analysis update after pipe finish
     };
 
+    const updateTankSchemeGuide = () => {
+        const map = mapInstanceRef.current;
+        if (!map) return;
+
+        if (!schemeGuideLayerRef.current) {
+            schemeGuideLayerRef.current = L.layerGroup().addTo(map);
+        }
+
+        schemeGuideLayerRef.current.clearLayers();
+        tankGuideCircleRef.current = null;
+
+        if (features.current.tank) {
+            const tankLL = features.current.tank.marker.getLatLng();
+            const circle = L.circle(tankLL, {
+                radius: 2000,
+                color: '#f59e0b',
+                weight: 2,
+                dashArray: '8, 6',
+                fillColor: '#f59e0b',
+                fillOpacity: 0.03,
+                interactive: false
+            }).addTo(schemeGuideLayerRef.current);
+            tankGuideCircleRef.current = circle;
+        }
+    };
+
     const recalcAutoConnections = () => {
         const map = mapInstanceRef.current;
         if (!map) return;
+
+        updateTankSchemeGuide();
 
         // Rising Main
         if (features.current.borehole && features.current.tank) {
@@ -1242,6 +1306,34 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
         const dailyDemandM3 = domesticDemandM3 + institutionalDemandM3;
         const flowRateM3H = dailyDemandM3 / inputs.peakSunHours;
+
+        // Scheme sizing helper: farthest designed point from tank (target <= 2 km).
+        let calculatedSchemeExtentKm: number | null = null;
+        if (features.current.tank) {
+            const tankLL = features.current.tank.marker.getLatLng();
+            let maxDistanceM = 0;
+            const extentCandidates: L.LatLng[] = [];
+
+            if (features.current.borehole) extentCandidates.push(features.current.borehole.marker.getLatLng());
+            features.current.taps.forEach(t => extentCandidates.push(t.marker.getLatLng()));
+            features.current.institutions.forEach(i => extentCandidates.push(i.marker.getLatLng()));
+
+            features.current.mainLines.forEach(ml => {
+                const pts = ml.poly.getLatLngs() as L.LatLng[];
+                const flatPts = (Array.isArray(pts[0]) && !('lat' in pts[0])) ? (pts as any).flat() : pts;
+                flatPts.forEach(p => extentCandidates.push(p));
+            });
+
+            extentCandidates.forEach((pt) => {
+                const d = tankLL.distanceTo(pt);
+                if (d > maxDistanceM) maxDistanceM = d;
+            });
+
+            if (maxDistanceM > 0) {
+                calculatedSchemeExtentKm = maxDistanceM / 1000;
+            }
+        }
+        setSchemeExtentKm(calculatedSchemeExtentKm);
 
         setCounts({
             taps: features.current.taps.length,
@@ -1638,6 +1730,14 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     ].filter(Boolean).join(', ');
     const buildingSourceLabel = showGoogleBuildings ? 'Google Buildings' : showOSMBuildings ? 'OSM Buildings' : 'No Building Layer';
     const canEstimatePopulationNow = showGoogleBuildings && counts.hasBh && counts.hasTank && counts.mainLen > 0 && (counts.taps + counts.schools + counts.clinics + counts.gardens) > 0;
+    const schemeWithinTarget = schemeExtentKm === null ? null : schemeExtentKm <= 2;
+
+    const fitMapToTankScheme = () => {
+        const map = mapInstanceRef.current;
+        const guide = tankGuideCircleRef.current;
+        if (!map || !guide) return;
+        map.fitBounds(guide.getBounds(), { padding: [40, 40], maxZoom: 14 });
+    };
 
     return (
         <div className="flex flex-col gap-4 h-[calc(100vh-140px)] relative">
@@ -1684,11 +1784,27 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                             <p><strong>2)</strong> Place the <strong>tank</strong> above most households in elevation where practical.</p>
                             <p><strong>3)</strong> Draw pipelines toward households downhill from tank, then add tapstands and institutions near main pipelines.</p>
                             <p><strong>4)</strong> Served/unserved only estimates after this workflow is complete.</p>
+                            <p><strong>Sizing Target:</strong> Keep overall scheme footprint within <strong>2.0 km</strong> from tank when possible.</p>
                             <p><strong>Rule:</strong> Unserved = downhill population within <strong>1.5 km</strong> of tank and outside service buffers.</p>
                         </div>
                         <div className="mt-2 text-[10px] text-slate-600">
                             Current building source: <strong>{buildingSourceLabel}</strong>
                         </div>
+                        {counts.hasTank && (
+                            <div className={`mt-2 text-[10px] font-medium ${schemeWithinTarget === false ? 'text-amber-700' : 'text-emerald-700'}`}>
+                                Current scheme extent from tank: <strong>{schemeExtentKm ? schemeExtentKm.toFixed(2) : '0.00'} km</strong>
+                                {schemeWithinTarget === false ? ' (above 2.0 km target)' : ' (within 2.0 km target)'}
+                            </div>
+                        )}
+                        {counts.hasTank && (
+                            <button
+                                type="button"
+                                onClick={fitMapToTankScheme}
+                                className="mt-2 px-2 py-1 bg-amber-100 text-amber-800 rounded text-[10px] font-bold hover:bg-amber-200 transition"
+                            >
+                                Fit Map to 2 km Tank Zone
+                            </button>
+                        )}
                     </div>
                     {/* Spatial Analysis Inputs */}
                     <div className="p-2 bg-blue-50 rounded border border-blue-100 mb-2">
@@ -1783,6 +1899,14 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     </div>
                 )}
                 <div className="absolute top-4 right-4 z-[450] flex gap-2">
+                    {counts.hasTank && (
+                        <button
+                            onClick={fitMapToTankScheme}
+                            className="bg-amber-100/95 border border-amber-300 rounded-lg shadow px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-200"
+                        >
+                            Fit 2 km Zone
+                        </button>
+                    )}
                     <button
                         onClick={() => setShowLayerPanel(prev => !prev)}
                         className="bg-white/95 border border-gray-200 rounded-lg shadow px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
