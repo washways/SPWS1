@@ -10,6 +10,7 @@ const DEFAULT_HYDRAULIC_INPUTS: HydraulicInputs = {
     staticWaterLevel: 25,
     elevationDifference: 15,
     tankHeight: 6,
+    tankUnitVolumeM3: 45,
     pipeLength: 0,
     dailyDemandPerCapita: 30,
     peakSunHours: 5.5,

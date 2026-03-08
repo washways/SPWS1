@@ -1306,6 +1306,10 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
         const dailyDemandM3 = domesticDemandM3 + institutionalDemandM3;
         const flowRateM3H = dailyDemandM3 / inputs.peakSunHours;
+        const requiredTankStorageM3 = Math.ceil(dailyDemandM3);
+        const tankUnitVolumeM3 = Math.max(1, Math.round(inputs.tankUnitVolumeM3 || 45));
+        const tankUnits = Math.max(1, Math.ceil(requiredTankStorageM3 / tankUnitVolumeM3));
+        const installedTankStorageM3 = tankUnits * tankUnitVolumeM3;
 
         // Scheme sizing helper: farthest designed point from tank (target <= 2 km).
         let calculatedSchemeExtentKm: number | null = null;
@@ -1402,7 +1406,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         const pvArrayKW = pumpPowerKW * 1.5;
 
         const specs: SystemSpecs = {
-            dailyDemandM3, domesticDemandM3, institutionalDemandM3, totalDynamicHead, flowRateM3H, pumpPowerKW, pvArrayKW, pipeDiameterMM: 63,
+            dailyDemandM3, domesticDemandM3, institutionalDemandM3,
+            requiredTankStorageM3, tankUnitVolumeM3, tankUnits, installedTankStorageM3,
+            totalDynamicHead, flowRateM3H, pumpPowerKW, pvArrayKW, pipeDiameterMM: 63,
             countSchools, countClinics, countGardens, hasGrid
         };
 
@@ -1411,7 +1417,15 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         // Civils
         boq.push({ id: 'c1', category: 'Civils', item: 'Borehole Drilling & Construction', unit: 'm', qty: inputs.boreholeDepth, rate: DESIGN_COSTS.DRILLING_PER_M, amount: Math.round(inputs.boreholeDepth * DESIGN_COSTS.DRILLING_PER_M) });
         boq.push({ id: 'c2', category: 'Civils', item: 'Borehole Siting & Mob/Demob', unit: 'LS', qty: 1, rate: DESIGN_COSTS.DRILLING_BASE, amount: Math.round(DESIGN_COSTS.DRILLING_BASE) });
-        boq.push({ id: 'c3', category: 'Civils', item: `Tank Stand (${inputs.tankHeight}m) & Base`, unit: 'Sum', qty: 1, rate: DESIGN_COSTS.TANK_STAND_6M, amount: Math.round(DESIGN_COSTS.TANK_STAND_6M) });
+        boq.push({
+            id: 'c3',
+            category: 'Civils',
+            item: `Tank Stand (${inputs.tankHeight}m) & Base`,
+            unit: 'No',
+            qty: tankUnits,
+            rate: DESIGN_COSTS.TANK_STAND_6M,
+            amount: Math.round(tankUnits * DESIGN_COSTS.TANK_STAND_6M)
+        });
         boq.push({ id: 'c4', category: 'Civils', item: 'Fencing & Site Works', unit: 'Sum', qty: 1, rate: DESIGN_COSTS.FENCE_CIVILS, amount: Math.round(DESIGN_COSTS.FENCE_CIVILS) });
         boq.push({ id: 'c5', category: 'Civils', item: 'Tap Stand Construction', unit: 'No', qty: counts.taps, rate: DESIGN_COSTS.DISTRIBUTION_POINTS, amount: Math.round(counts.taps * DESIGN_COSTS.DISTRIBUTION_POINTS) });
 
@@ -1428,8 +1442,16 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         }
 
         // Mechanical
-        const tankCost = DESIGN_COSTS.TANK_STEEL_BASE + (dailyDemandM3 * DESIGN_COSTS.TANK_PER_M3);
-        boq.push({ id: 'm1', category: 'Mechanical', item: `Steel Tank (${Math.ceil(dailyDemandM3)}m3)`, unit: 'No', qty: 1, rate: Math.round(tankCost), amount: Math.round(tankCost) });
+        const tankRateEach = DESIGN_COSTS.TANK_STEEL_BASE + (tankUnitVolumeM3 * DESIGN_COSTS.TANK_PER_M3);
+        boq.push({
+            id: 'm1',
+            category: 'Mechanical',
+            item: `Steel Tank (${tankUnitVolumeM3}m3 each, total ${installedTankStorageM3}m3)`,
+            unit: 'No',
+            qty: tankUnits,
+            rate: Math.round(tankRateEach),
+            amount: Math.round(tankRateEach * tankUnits)
+        });
         const pumpCost = DESIGN_COSTS.PUMP_BASE + (pumpPowerKW * DESIGN_COSTS.PUMP_PER_KW);
         boq.push({ id: 'm2', category: 'Mechanical', item: `Submersible Pump (${pumpPowerKW.toFixed(1)}kW)`, unit: 'No', qty: 1, rate: Math.round(pumpCost), amount: Math.round(pumpCost) });
 
@@ -1861,6 +1883,16 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                         <p className="text-[10px] text-gray-500 mt-1">Use "Use Served" to copy the latest served-pop estimate into model population.</p>
                     </div>
                     <div>
+                        <label className="block text-gray-600 text-xs font-bold mb-1">Demand (Liters per Person per Day)</label>
+                        <input
+                            type="number"
+                            value={inputs.dailyDemandPerCapita}
+                            onChange={e => setInputs({ ...inputs, dailyDemandPerCapita: Math.max(1, parseFloat(e.target.value) || 1) })}
+                            className="w-full p-2 border rounded"
+                        />
+                        <p className="text-[10px] text-gray-500 mt-1">This is used directly to size pumping flow and required tank storage volume.</p>
+                    </div>
+                    <div>
                         <label className="block text-gray-600 text-xs font-bold mb-1">Borehole Depth (m)</label>
                         <input type="number" value={inputs.boreholeDepth} onChange={e => setInputs({ ...inputs, boreholeDepth: parseFloat(e.target.value) || 0 })} className="w-full p-2 border rounded" />
                         <p className="text-[10px] text-gray-500 mt-1">Total drilled depth. Example: 40-90m in many Malawi settings.</p>
@@ -1873,6 +1905,16 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     <div><label className="block text-gray-600 text-xs font-bold mb-1">Tank Stand Height (m)</label>
                         <select value={inputs.tankHeight} onChange={e => setInputs({ ...inputs, tankHeight: parseFloat(e.target.value) })} className="w-full p-2 border rounded"><option value={3}>3m</option><option value={6}>6m</option><option value={9}>9m</option></select>
                         <p className="text-[10px] text-gray-500 mt-1">Higher stands improve pressure but increase cost and structural demand.</p>
+                    </div>
+                    <div>
+                        <label className="block text-gray-600 text-xs font-bold mb-1">Tank Module Size (m3 per Tank)</label>
+                        <input
+                            type="number"
+                            value={inputs.tankUnitVolumeM3}
+                            onChange={e => setInputs({ ...inputs, tankUnitVolumeM3: Math.max(1, parseFloat(e.target.value) || 1) })}
+                            className="w-full p-2 border rounded"
+                        />
+                        <p className="text-[10px] text-gray-500 mt-1">Example: 45 means the design will use multiple 45 m3 tanks when needed to meet storage demand.</p>
                     </div>
                 </div>
                 <div className="mt-auto bg-slate-800 text-white p-4 rounded-lg text-xs space-y-2">

@@ -21,6 +21,7 @@ export interface HydraulicInputs {
   staticWaterLevel: number; // meters
   elevationDifference: number; // meters (Borehole to Tank base)
   tankHeight: number; // meters (Stand height)
+  tankUnitVolumeM3: number; // Standard tank module size (m3), e.g. 45
   pipeLength: number; // meters (from map)
   dailyDemandPerCapita: number; // Liters/person/day
   peakSunHours: number; // hrs/day
@@ -66,6 +67,10 @@ export interface SystemSpecs {
   dailyDemandM3: number;
   domesticDemandM3: number; // New
   institutionalDemandM3: number; // New
+  requiredTankStorageM3: number;
+  tankUnitVolumeM3: number;
+  tankUnits: number;
+  installedTankStorageM3: number;
   totalDynamicHead: number;
   flowRateM3H: number;
   pumpPowerKW: number;

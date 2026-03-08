@@ -172,7 +172,7 @@ export const SystemSchematic: React.FC<SystemSchematicProps> = ({ inputs, specs,
 
     const tankSimulationData = useMemo(() => {
         if (!specs) return [];
-        const tankCapacity = Math.ceil(specs.dailyDemandM3); 
+        const tankCapacity = specs.installedTankStorageM3 || Math.ceil(specs.dailyDemandM3);
         const startLevel = tankCapacity * 0.4;
         const data = [];
         let currentLevel = startLevel;
@@ -260,7 +260,9 @@ export const SystemSchematic: React.FC<SystemSchematicProps> = ({ inputs, specs,
                     <div className="space-y-3 print:space-y-1 print:text-xs">
                         <div className="flex justify-between border-b border-gray-50 pb-2 print:pb-1"><span className="text-gray-600">Pump Power</span><span className="font-bold">{specs.pumpPowerKW.toFixed(2)} kW</span></div>
                         <div className="flex justify-between border-b border-gray-50 pb-2 print:pb-1"><span className="text-gray-600">Solar Generator</span><span className="font-bold text-yellow-600">{specs.pvArrayKW.toFixed(2)} kWp</span></div>
-                        <div className="flex justify-between border-b border-gray-50 pb-2 print:pb-1"><span className="text-gray-600">Tank Capacity</span><span className="font-bold text-cyan-600">{Math.ceil(specs.dailyDemandM3)} m³</span></div>
+                        <div className="flex justify-between border-b border-gray-50 pb-2 print:pb-1"><span className="text-gray-600">Required Storage</span><span className="font-bold text-cyan-700">{specs.requiredTankStorageM3 || Math.ceil(specs.dailyDemandM3)} m3</span></div>
+                        <div className="flex justify-between border-b border-gray-50 pb-2 print:pb-1"><span className="text-gray-600">Tank Configuration</span><span className="font-bold text-cyan-600">{specs.tankUnits || 1} x {specs.tankUnitVolumeM3 || Math.ceil(specs.dailyDemandM3)} m3</span></div>
+                        <div className="flex justify-between border-b border-gray-50 pb-2 print:pb-1"><span className="text-gray-600">Installed Storage</span><span className="font-bold text-cyan-600">{specs.installedTankStorageM3 || Math.ceil(specs.dailyDemandM3)} m3</span></div>
                         <div className="flex justify-between"><span className="text-gray-600">Main Pipeline</span><span className="font-bold">HDPE {specs.pipeDiameterMM}mm</span></div>
                     </div>
                 </div>
@@ -410,3 +412,4 @@ export const SystemSchematic: React.FC<SystemSchematicProps> = ({ inputs, specs,
         </div>
     );
 };
+
