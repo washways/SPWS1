@@ -233,28 +233,28 @@ const App: React.FC = () => {
                     <div className="mb-6 bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
                         <div className="flex items-center gap-2 mb-3">
                             <Info className="w-5 h-5 text-[#1CABE2]" />
-                            <h3 className="font-bold text-gray-800 text-lg">System Design Instructions</h3>
+                            <h3 className="font-bold text-gray-800 text-lg">Map Guided Workflow</h3>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-sm text-gray-600">
                             <div className="bg-blue-50 p-3 rounded border border-blue-100">
-                                <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><Search className="w-4 h-4" /> 1. Search Location</div>
-                                <p className="text-xs">Use the search bar on the left panel to find a Village. Drag the map to refine.</p>
+                                <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><Search className="w-4 h-4" /> 1. Set Site + Buildings</div>
+                                <p className="text-xs">Search and zoom to site, turn on <strong>Google Buildings</strong>, then wait for the loading spinner to finish before reading served/unserved totals.</p>
                             </div>
                             <div className="bg-blue-50 p-3 rounded border border-blue-100">
-                                <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><Layers className="w-4 h-4" /> 2. Choose View</div>
-                                <p className="text-xs">Switch to <strong>Satellite</strong> for buildings or <strong>Topography</strong> for hydraulic planning.</p>
+                                <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><Layers className="w-4 h-4" /> 2. Read DTW + GWP</div>
+                                <p className="text-xs"><strong>DTW:</strong> lower depth areas are easier drilling targets. <strong>GWP:</strong> higher potential areas are stronger candidate zones. Use both together.</p>
                             </div>
                             <div className="bg-blue-50 p-3 rounded border border-blue-100">
-                                <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><Settings className="w-4 h-4" /> 3. Adjust Inputs</div>
-                                <p className="text-xs">Update <strong>Borehole Depth</strong> and <strong>Static Water Level</strong> before starting.</p>
+                                <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><Settings className="w-4 h-4" /> 3. Check Elevation</div>
+                                <p className="text-xs">Use <strong>Elevation</strong> and <strong>Hillshade</strong> to place tanks on practical high points and to avoid steep pipe runs.</p>
                             </div>
                             <div className="bg-blue-50 p-3 rounded border border-blue-100">
-                                <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><MapIcon className="w-4 h-4" /> 4. Design Network</div>
-                                <p className="text-xs">Place <strong>Borehole</strong> & <strong>Tank</strong>. Connect with <strong>Pipes</strong>. Add <strong>Taps</strong> near homes.</p>
+                                <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><MapIcon className="w-4 h-4" /> 4. Estimate Population</div>
+                                <p className="text-xs">Place borehole, tank, and <strong>tapstands</strong>. Tune <strong>Service Buffer</strong> + <strong>People per Building</strong>, then click <strong>Use Served</strong> to update target population.</p>
                             </div>
                             <div className="bg-emerald-50 p-3 rounded border border-emerald-100 ring-2 ring-emerald-500/20">
                                 <div className="flex items-center gap-2 font-bold text-emerald-800 mb-1"><CheckCircle className="w-4 h-4" /> 5. Final Step</div>
-                                <p className="text-xs font-medium">Click <strong>Apply Design</strong> in the sidebar to generate costs and schematics.</p>
+                                <p className="text-xs font-medium">Click <strong>Apply Design</strong> to lock hydraulics and costs, then review Economic Analysis and export the report.</p>
                             </div>
                         </div>
                     </div>

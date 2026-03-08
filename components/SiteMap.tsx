@@ -1516,6 +1516,17 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     }, [bufferDistance, peoplePerBuilding, showOSMBuildings, showGoogleBuildings, buildingsLoading, analysisUpdateTrigger]); // Removed counts to prevent loop
 
     // Recalc when pipes change
+    const activeRasterLoads = [
+        layerLoading.dtw ? 'DTW' : null,
+        layerLoading.gw ? 'GWP' : null,
+        layerLoading.dem ? 'Elevation' : null,
+        layerLoading.hillshade ? 'Hillshade' : null
+    ].filter(Boolean) as string[];
+    const layerLoadingText = [
+        buildingsLoading ? 'Buildings' : null,
+        ...activeRasterLoads
+    ].filter(Boolean).join(', ');
+    const buildingSourceLabel = showGoogleBuildings ? 'Google Buildings' : showOSMBuildings ? 'OSM Buildings' : 'No Building Layer';
 
     return (
         <div className="flex flex-col md:flex-row gap-4 h-[calc(100vh-140px)] relative">
@@ -1555,6 +1566,18 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     <h3 className="font-bold text-[#003E5E] flex items-center gap-2 border-b border-gray-200 pb-2"><Settings className="w-4 h-4" /> Design Parameters</h3>
                 </div>
                 <div className="space-y-4 text-sm">
+                    <div className="p-2.5 bg-slate-50 rounded border border-slate-200">
+                        <h4 className="font-bold text-slate-800 text-xs mb-2">Population Estimation Workflow</h4>
+                        <div className="text-[10px] text-slate-700 space-y-1">
+                            <p><strong>1)</strong> Turn on <strong>Google Buildings</strong> and wait for loading to finish.</p>
+                            <p><strong>2)</strong> Place tapstands where water will actually be accessed.</p>
+                            <p><strong>3)</strong> Adjust <strong>Service Buffer</strong> and <strong>People per Building</strong>.</p>
+                            <p><strong>4)</strong> Click <strong>Use Served</strong> to update Target Population.</p>
+                        </div>
+                        <div className="mt-2 text-[10px] text-slate-600">
+                            Current building source: <strong>{buildingSourceLabel}</strong>
+                        </div>
+                    </div>
                     {/* Spatial Analysis Inputs */}
                     <div className="p-2 bg-blue-50 rounded border border-blue-100 mb-2">
                         <h4 className="font-bold text-blue-800 text-xs mb-2">Service Coverage</h4>
@@ -1594,13 +1617,13 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold hover:bg-blue-200 transition"
                                 title={`Sync with Spatial Analysis (Currently Served: ${servedPop.toLocaleString()})`}
                             >
-                                Sync
+                                Use Served
                             </button>
                         </div>
                         <div className="text-[10px] text-gray-500 mt-1 text-right">
                             Spatial Estimate: <strong>{servedPop.toLocaleString()}</strong>
                         </div>
-                        <p className="text-[10px] text-gray-500 mt-1">Use "Sync" to copy the served-pop estimate into model population.</p>
+                        <p className="text-[10px] text-gray-500 mt-1">Use "Use Served" to copy the latest served-pop estimate into model population.</p>
                     </div>
                     <div>
                         <label className="block text-gray-600 text-xs font-bold mb-1">Borehole Depth (m)</label>
@@ -1630,8 +1653,20 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             {/* 2. MAP AREA */}
             <div className="order-1 md:order-2 flex-1 relative min-h-[400px] md:h-full bg-gray-100 rounded-xl overflow-hidden shadow-inner border border-gray-300">
                 <div ref={mapContainerRef} className="w-full h-full z-0 min-h-[400px]" style={{ minHeight: '400px' }} />
-                {loadingElevation && <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow text-xs font-bold text-blue-600 flex items-center gap-2 z-[400]"><Activity className="w-3 h-3 animate-spin" /> Fetching Elevation...</div>}
-                {buildingsLoading && <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow text-xs font-bold text-green-600 flex items-center gap-2 z-[400]"><Activity className="w-3 h-3 animate-spin" /> Loading Buildings...</div>}
+                {(loadingElevation || buildingsLoading || activeRasterLoads.length > 0) && (
+                    <div className="absolute top-4 left-4 flex flex-col gap-2 z-[400]">
+                        {loadingElevation && (
+                            <div className="bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow text-xs font-bold text-blue-600 flex items-center gap-2">
+                                <Activity className="w-3 h-3 animate-spin" /> Fetching Elevation...
+                            </div>
+                        )}
+                        {(buildingsLoading || activeRasterLoads.length > 0) && (
+                            <div className="bg-white/90 backdrop-blur px-3 py-1 rounded-full shadow text-xs font-bold text-emerald-700 flex items-center gap-2">
+                                <Activity className="w-3 h-3 animate-spin" /> Loading map data: {layerLoadingText}...
+                            </div>
+                        )}
+                    </div>
+                )}
                 <div className="absolute top-4 right-4 bg-white rounded-lg shadow-md border border-gray-200 p-2 flex flex-col gap-2 z-[400]">
                     {/* Google Buildings Toggle */}
                     <button
@@ -1645,6 +1680,11 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     >
                         <Box className="w-4 h-4" />
                         <span className="text-xs font-semibold">Google Buildings</span>
+                        {buildingsLoading && showGoogleBuildings && (
+                            <div className="ml-auto">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                            </div>
+                        )}
                     </button>
 
                     <button
@@ -1657,10 +1697,18 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     >
                         <Home className="w-4 h-4" />
                         <span className="text-xs font-semibold">OSM Buildings</span>
+                        {buildingsLoading && showOSMBuildings && (
+                            <div className="ml-auto">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                            </div>
+                        )}
                     </button>
 
                     <div className="w-full h-px bg-gray-300"></div>
                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1 mb-1">GEE Layers</div>
+                    <div className="text-[9px] text-gray-500 px-1 -mt-1">
+                        DTW + GWP help borehole siting. Elevation + Hillshade guide tank and pipe routing.
+                    </div>
 
                     <button
                         onClick={() => setShowDTW(!showDTW)}
@@ -1693,6 +1741,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 }}
                                 className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                             />
+                            <div className="mt-1 text-[9px] text-gray-600">Use DTW to spot shallower water-table zones for easier drilling.</div>
                             {/* Legend */}
                             <div className="mt-2 p-2 bg-white rounded border border-gray-200">
                                 <div className="text-[9px] font-semibold text-gray-700 mb-1">Depth to Water (m)</div>
@@ -1738,6 +1787,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 }}
                                 className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                             />
+                            <div className="mt-1 text-[9px] text-gray-600">Use GWP to prioritize zones with stronger groundwater likelihood.</div>
                             <div className="mt-1 text-[9px] text-gray-600">
                                 View range: {layerRanges.gw.min.toFixed(3)} to {layerRanges.gw.max.toFixed(3)}
                             </div>
@@ -1775,6 +1825,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 }}
                                 className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                             />
+                            <div className="mt-1 text-[9px] text-gray-600">Use elevation to reduce pumping head and identify practical tank points.</div>
                             <div className="mt-1 text-[9px] text-gray-600">
                                 View range: {layerRanges.dem.min.toFixed(1)} m to {layerRanges.dem.max.toFixed(1)} m
                             </div>
