@@ -52,6 +52,7 @@ const App: React.FC = () => {
     const [notices, setNotices] = useState<AppNotice[]>([]);
     const [hasVisitedAnalysis, setHasVisitedAnalysis] = useState(false);
     const [hasExportedReport, setHasExportedReport] = useState(false);
+    const [contractorExportMode, setContractorExportMode] = useState(false);
 
     useEffect(() => {
         const onNotice = (event: Event) => {
@@ -306,6 +307,7 @@ const App: React.FC = () => {
                         projectDetails={projectDetails}
                         population={global.population}
                         designPopulation={finalDesignPopulation}
+                        redactUnitCosts={false}
                     />
                 </div>
 
@@ -395,10 +397,20 @@ const App: React.FC = () => {
                                 <div><h2 className="font-bold text-gray-900">Economic Analysis</h2><p className="text-sm text-gray-500">20-Year Lifecycle Cost Comparison</p></div>
                                 <div className="flex gap-2">
                                     <div className="px-3 py-1 bg-gray-100 rounded text-xs font-medium text-gray-600 flex items-center">Handpumps Needed: <strong className="ml-1 text-gray-900">{handpumpsNeeded}</strong></div>
+                                    <label className="px-3 py-1 bg-gray-100 rounded text-xs font-medium text-gray-700 flex items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={contractorExportMode}
+                                            onChange={(e) => setContractorExportMode(e.target.checked)}
+                                            className="rounded border-gray-300"
+                                        />
+                                        Contractor Export (hide unit costs)
+                                    </label>
                                     <button onClick={() => {
                                         const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
                                         const cleanName = (projectDetails.siteName || 'Site').replace(/[^a-z0-9]/gi, '_');
-                                        generatePDF('report-content', `Feasibility_Report_${cleanName}_${dateStr}.pdf`);
+                                        const suffix = contractorExportMode ? '_Contractor_NoUnitCosts' : '';
+                                        generatePDF('report-content', `Feasibility_Report_${cleanName}_${dateStr}${suffix}.pdf`);
                                     }} disabled={isDownloadingPdf} className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-700 transition shadow-sm disabled:opacity-75">
                                         {isDownloadingPdf ? <Activity className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                                         {isDownloadingPdf ? "Generating PDF..." : "Download Full Report"}
@@ -414,6 +426,9 @@ const App: React.FC = () => {
                                         <h1 className="text-3xl font-bold text-gray-900">Water Supply Feasibility Report</h1>
                                         <p className="text-gray-500 text-lg mt-2">{projectDetails.siteName || "Site Name Not Specified"} | Contract: {projectDetails.contractNumber || "TBD"}</p>
                                         <p className="text-sm text-gray-400 mt-1">Generated: {new Date().toLocaleDateString()}</p>
+                                        {contractorExportMode && (
+                                            <p className="text-sm text-amber-700 mt-2 font-medium">Contractor Export Mode: Unit costs are hidden in BoQ sections.</p>
+                                        )}
 
                                         <div className="mt-6 text-left bg-slate-50 p-4 rounded-lg border border-slate-100">
                                             <h3 className="font-bold text-slate-800 mb-2">Executive Summary</h3>
@@ -443,6 +458,7 @@ const App: React.FC = () => {
                                             printMode={isDownloadingPdf}
                                             population={global.population}
                                             designPopulation={finalDesignPopulation}
+                                            redactUnitCosts={contractorExportMode}
                                         />
                                         <div className="html2pdf__page-break"></div>
                                     </div>
