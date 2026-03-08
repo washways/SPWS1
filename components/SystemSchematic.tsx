@@ -21,12 +21,15 @@ interface SystemSchematicProps {
     printMode?: boolean; 
     population?: number;
     designPopulation?: number;
+    redactUnitCosts?: boolean;
 }
 
-export const SystemSchematic: React.FC<SystemSchematicProps> = ({ inputs, specs, boq, profiles, currency, onUpdateRate, geometry, projectDetails, printMode = false, population, designPopulation }) => {
+export const SystemSchematic: React.FC<SystemSchematicProps> = ({ inputs, specs, boq, profiles, currency, onUpdateRate, geometry, projectDetails, printMode = false, population, designPopulation, redactUnitCosts = false }) => {
     const mapRef = useRef<HTMLDivElement>(null);
     const mapInstance = useRef<L.Map | null>(null);
     const [isDownloading, setIsDownloading] = useState(false);
+    const [technicalContractorMode, setTechnicalContractorMode] = useState(false);
+    const costRedacted = redactUnitCosts || technicalContractorMode;
 
     const downloadPDF = async () => {
         setIsDownloading(true);
@@ -45,7 +48,7 @@ export const SystemSchematic: React.FC<SystemSchematicProps> = ({ inputs, specs,
 
         const opt = {
             margin: [5, 5, 5, 5],
-            filename: `Technical_Design_${projectDetails.siteName || 'Site'}.pdf`,
+            filename: `Technical_Design_${projectDetails.siteName || 'Site'}${costRedacted ? '_NoUnitCosts' : ''}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2, useCORS: true, logging: true, allowTaint: true },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
@@ -208,11 +211,28 @@ export const SystemSchematic: React.FC<SystemSchematicProps> = ({ inputs, specs,
             <div className={`bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center print:border-b-4 print:border-gray-900 print:shadow-none print:p-4 ${printMode ? 'hidden' : ''}`}>
                 <div className="w-full">
                     <div className="flex justify-between items-start w-full">
-                        <div><h2 className="text-2xl font-bold text-gray-900 print:text-xl">System Schematic & BoQ</h2><p className="text-gray-500 print:hidden">Contractor-ready technical output</p></div>
-                         <button onClick={downloadPDF} disabled={isDownloading} className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-700 transition disabled:opacity-50" data-html2canvas-ignore="true">
-                            {isDownloading ? <Activity className="w-4 h-4 animate-spin"/> : <Download className="w-4 h-4" />}
-                            {isDownloading ? 'Generating...' : 'Download Technical PDF'}
-                         </button>
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-900 print:text-xl">System Schematic & BoQ</h2>
+                            <p className="text-gray-500 print:hidden">Contractor-ready technical output</p>
+                            {costRedacted && <p className="text-xs text-amber-700 mt-1">Unit costs hidden for contractor pricing input.</p>}
+                        </div>
+                        <div className="flex flex-col items-end gap-2" data-html2canvas-ignore="true">
+                            {!printMode && (
+                                <label className="px-3 py-1 bg-gray-100 rounded text-xs font-medium text-gray-700 flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={technicalContractorMode}
+                                        onChange={(e) => setTechnicalContractorMode(e.target.checked)}
+                                        className="rounded border-gray-300"
+                                    />
+                                    Hide Unit Costs (Contractor)
+                                </label>
+                            )}
+                            <button onClick={downloadPDF} disabled={isDownloading} className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-700 transition disabled:opacity-50">
+                                {isDownloading ? <Activity className="w-4 h-4 animate-spin"/> : <Download className="w-4 h-4" />}
+                                {isDownloading ? 'Generating...' : 'Download Technical PDF'}
+                            </button>
+                        </div>
                     </div>
                     <div className="mt-6 grid grid-cols-3 gap-4 border-t pt-4 w-full text-sm print:mt-2 print:pt-2">
                         <div><span className="text-xs font-bold text-gray-500 uppercase">Site Name</span><div className="font-bold text-lg text-gray-900">{projectDetails.siteName || "Unspecified Site"}</div></div>
@@ -248,10 +268,10 @@ export const SystemSchematic: React.FC<SystemSchematicProps> = ({ inputs, specs,
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 print:p-4 print:border">
                     <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-4 print:mb-2">Cost Estimate</h3>
                     <div className="space-y-3 print:space-y-1 print:text-xs">
-                        <div className="flex justify-between border-b border-gray-50 pb-2 print:pb-1"><span className="text-gray-600">Civil Works</span><span className="font-bold">${Math.round(civilsTotal).toLocaleString()}</span></div>
-                        <div className="flex justify-between border-b border-gray-50 pb-2 print:pb-1"><span className="text-gray-600">Pipe Network</span><span className="font-bold">${Math.round(networkTotal).toLocaleString()}</span></div>
-                        <div className="flex justify-between border-b border-gray-50 pb-2 print:pb-1"><span className="text-gray-600">M&E Equip</span><span className="font-bold">${Math.round(mepTotal).toLocaleString()}</span></div>
-                        <div className="flex justify-between pt-1"><span className="text-gray-900 font-bold">TOTAL CAPEX</span><span className="font-bold text-xl text-emerald-600">${Math.round(totalCost).toLocaleString()}</span></div>
+                        <div className="flex justify-between border-b border-gray-50 pb-2 print:pb-1"><span className="text-gray-600">Civil Works</span><span className="font-bold">{costRedacted ? 'Contractor to price' : `$${Math.round(civilsTotal).toLocaleString()}`}</span></div>
+                        <div className="flex justify-between border-b border-gray-50 pb-2 print:pb-1"><span className="text-gray-600">Pipe Network</span><span className="font-bold">{costRedacted ? 'Contractor to price' : `$${Math.round(networkTotal).toLocaleString()}`}</span></div>
+                        <div className="flex justify-between border-b border-gray-50 pb-2 print:pb-1"><span className="text-gray-600">M&E Equip</span><span className="font-bold">{costRedacted ? 'Contractor to price' : `$${Math.round(mepTotal).toLocaleString()}`}</span></div>
+                        <div className="flex justify-between pt-1"><span className="text-gray-900 font-bold">TOTAL CAPEX</span><span className="font-bold text-xl text-emerald-600">{costRedacted ? 'Contractor to price' : `$${Math.round(totalCost).toLocaleString()}`}</span></div>
                     </div>
                 </div>
             </div>
@@ -345,8 +365,8 @@ export const SystemSchematic: React.FC<SystemSchematicProps> = ({ inputs, specs,
                                 <th className="px-6 py-3 print:px-2 print:py-1">Item Description</th>
                                 <th className="px-6 py-3 text-center print:px-1 print:py-1">Unit</th>
                                 <th className="px-6 py-3 text-right print:px-1 print:py-1">Qty</th>
-                                <th className="px-6 py-3 text-right w-32 print:w-16 print:px-1 print:py-1">Rate ($)</th>
-                                <th className="px-6 py-3 text-right print:px-2 print:py-1">Amount ($)</th>
+                                {!costRedacted && <th className="px-6 py-3 text-right w-32 print:w-16 print:px-1 print:py-1">Rate ($)</th>}
+                                {!costRedacted && <th className="px-6 py-3 text-right print:px-2 print:py-1">Amount ($)</th>}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -356,13 +376,24 @@ export const SystemSchematic: React.FC<SystemSchematicProps> = ({ inputs, specs,
                                     <td className="px-6 py-3 text-gray-900 print:px-2 print:py-1">{item.item}</td>
                                     <td className="px-6 py-3 text-center text-gray-500 print:px-1 print:py-1">{item.unit}</td>
                                     <td className="px-6 py-3 text-right text-gray-900 print:px-1 print:py-1">{item.qty.toLocaleString()}</td>
-                                    <td className="px-6 py-3 text-right print:px-1 print:py-1">
-                                        <input type="number" value={item.rate} onChange={(e) => onUpdateRate(item.id, parseFloat(e.target.value)||0)} className="w-24 text-right p-1 border border-transparent hover:border-gray-300 focus:border-blue-500 rounded bg-transparent focus:bg-white outline-none transition print:border-none print:w-full print:p-0"/>
-                                    </td>
-                                    <td className="px-6 py-3 text-right font-bold text-gray-900 print:px-2 print:py-1">{Math.round(item.amount).toLocaleString()}</td>
+                                    {!costRedacted && (
+                                        <td className="px-6 py-3 text-right print:px-1 print:py-1">
+                                            <input type="number" value={item.rate} onChange={(e) => onUpdateRate(item.id, parseFloat(e.target.value)||0)} className="w-24 text-right p-1 border border-transparent hover:border-gray-300 focus:border-blue-500 rounded bg-transparent focus:bg-white outline-none transition print:border-none print:w-full print:p-0"/>
+                                        </td>
+                                    )}
+                                    {!costRedacted && <td className="px-6 py-3 text-right font-bold text-gray-900 print:px-2 print:py-1">{Math.round(item.amount).toLocaleString()}</td>}
                                 </tr>
                             ))}
-                            <tr className="bg-slate-50 font-bold print:bg-gray-200"><td colSpan={5} className="px-6 py-4 text-right text-gray-900 uppercase print:px-2 print:py-2">Total Estimated Cost</td><td className="px-6 py-4 text-right text-emerald-600 text-lg print:px-2 print:py-2 print:text-sm">${Math.round(totalCost).toLocaleString()}</td></tr>
+                            {!costRedacted ? (
+                                <tr className="bg-slate-50 font-bold print:bg-gray-200">
+                                    <td colSpan={5} className="px-6 py-4 text-right text-gray-900 uppercase print:px-2 print:py-2">Total Estimated Cost</td>
+                                    <td className="px-6 py-4 text-right text-emerald-600 text-lg print:px-2 print:py-2 print:text-sm">${Math.round(totalCost).toLocaleString()}</td>
+                                </tr>
+                            ) : (
+                                <tr className="bg-slate-50">
+                                    <td colSpan={4} className="px-6 py-4 text-gray-700 italic print:px-2 print:py-2">Unit rates and totals intentionally omitted for contractor pricing.</td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -373,7 +404,7 @@ export const SystemSchematic: React.FC<SystemSchematicProps> = ({ inputs, specs,
                 <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4 print:text-sm print:mb-2"><ClipboardCheck className="w-5 h-5 text-slate-600"/> Contractor Guidance & Notes</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-gray-600 print:grid-cols-2 print:gap-4">
                     <div><h4 className="font-bold text-gray-900 mb-2 uppercase tracking-wide">Design Assumptions</h4><ul className="list-disc list-inside space-y-1"><li>Pump Efficiency assumed at {(inputs.pumpEfficiency * 100).toFixed(0)}%.</li><li>Solar sizing factor: 1.5x Pump Power.</li><li>Friction losses calculated using Hazen-Williams C=140 (HDPE).</li></ul></div>
-                    <div><h4 className="font-bold text-gray-900 mb-2 uppercase tracking-wide">General Disclaimers</h4><ul className="list-disc list-inside space-y-1"><li>Preliminary design for estimation only.</li><li>All elevations derived from satellite data.</li><li>Quantities in BoQ are provisional.</li></ul></div>
+                    <div><h4 className="font-bold text-gray-900 mb-2 uppercase tracking-wide">General Disclaimers</h4><ul className="list-disc list-inside space-y-1"><li>Preliminary design for estimation only.</li><li>All elevations derived from satellite data.</li><li>Quantities in BoQ are provisional.</li>{costRedacted && <li>Unit costs removed intentionally for contractor-supplied pricing.</li>}</ul></div>
                 </div>
             </div>
         </div>
