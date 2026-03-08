@@ -161,14 +161,18 @@ const App: React.FC = () => {
     const hasValidatedDesign = hasDrawnNetwork && Boolean(systemSpecs && generatedBoQ.length > 0);
     const hasValidatedAndApplied = hasValidatedDesign && designApplied;
     const hasAnalyzed = hasVisitedAnalysis || simulationResult !== null;
-    const workflowSteps = [
-        { label: 'Locate Site + Buildings', done: hasLocatedSite, hint: 'Search village, load Google Buildings, and wait for layer loading.', tab: 'Design Map' },
-        { label: 'Layout Network', done: hasDrawnNetwork, hint: 'Place borehole/tank, then draw pipelines and add service points.', tab: 'Design Map' },
-        { label: 'Validate + Apply', done: hasValidatedAndApplied, hint: 'Review served/unserved population and click Apply Design.', tab: 'Design Map' },
-        { label: 'Review Economics', done: hasAnalyzed, hint: 'Check lifecycle cost comparison and sensitivity analysis.', tab: 'Economic Analysis' },
-        { label: 'Export + Share', done: hasExportedReport, hint: 'Download report PDF for implementation and procurement.', tab: 'Economic Analysis' }
-    ];
-    const nextPendingStep = workflowSteps.find(step => !step.done);
+    const nextActionText =
+        !hasLocatedSite
+            ? 'Next: Design Map -> search village and load Google Buildings.'
+            : !hasDrawnNetwork
+                ? 'Next: Design Map -> place borehole/tank, draw pipelines, and add service points.'
+                : !hasValidatedAndApplied
+                    ? 'Next: Design Map -> review served/unserved and click Apply Design.'
+                    : !hasAnalyzed
+                        ? 'Next: Economic Analysis -> review results and run sensitivity analysis.'
+                        : !hasExportedReport
+                            ? 'Next: Economic Analysis -> download the full PDF report.'
+                            : 'Workflow complete: design, analysis, and export are done.';
 
     return (
         <div className="min-h-screen bg-gray-100 font-sans text-gray-800 relative">
@@ -202,38 +206,13 @@ const App: React.FC = () => {
             </header >
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div className="mb-6 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 mb-3">
-                        <div>
-                            <h3 className="font-bold text-gray-900">Guided Workflow</h3>
-                            <p className="text-sm text-gray-600">Use one clear flow: Design Map -> Schematic & BoQ -> Economic Analysis -> Insights & Feedback.</p>
-                        </div>
-                        {nextPendingStep ? (
-                            <div className="text-xs bg-amber-50 border border-amber-200 text-amber-900 px-3 py-1.5 rounded-lg">
-                                Next: <strong>{nextPendingStep.label}</strong> ({nextPendingStep.tab}) - {nextPendingStep.hint}
-                            </div>
-                        ) : (
-                            <div className="text-xs bg-emerald-50 border border-emerald-200 text-emerald-900 px-3 py-1.5 rounded-lg">
-                                All workflow steps complete.
-                            </div>
-                        )}
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
-                        {workflowSteps.map((step, index) => (
-                            <div key={step.label} className={`rounded-lg border px-3 py-2 ${step.done ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
-                                <div className="text-xs font-bold uppercase tracking-wide text-gray-500">Step {index + 1}</div>
-                                <div className={`font-semibold text-sm ${step.done ? 'text-emerald-800' : 'text-gray-700'}`}>{step.label}</div>
-                                <div className="text-[11px] text-gray-500 mt-1">{step.done ? 'Completed' : `${step.hint} (${step.tab})`}</div>
-                            </div>
-                        ))}
-                    </div>
+                <div className="mb-4 bg-white p-3 rounded-lg border border-gray-200 text-sm text-gray-700">
+                    <strong>Workflow:</strong> Design Map -> Schematic & BoQ -> Economic Analysis -> Insights & Feedback.
+                    <div className="text-xs text-gray-600 mt-1">{nextActionText}</div>
                 </div>
 
                 {/* MAP TAB */}
                 <div className={activeTab === 'map' ? 'block' : 'hidden'}>
-                    <div className="mb-6 bg-blue-50 border border-blue-200 text-blue-900 p-4 rounded-lg shadow-sm text-sm">
-                        Complete <strong>Guided Workflow Steps 1-3</strong> here: search village and load buildings, place borehole/tank, route pipelines/service points, then click <strong>Apply Design</strong>.
-                    </div>
                     <SiteMap key={mapResetKey} population={global.population} setPopulation={(p) => setGlobal(prev => ({ ...prev, population: p }))} projectDetails={projectDetails} setProjectDetails={setProjectDetails} inputs={hydraulicInputs} setInputs={setHydraulicInputs} onUpdateCalc={handleUpdateCalc} onApplyDesign={handleApplyDesign} />
                 </div>
 
