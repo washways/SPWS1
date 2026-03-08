@@ -330,13 +330,34 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                         // @ts-ignore
                         const chroma = (await import('chroma-js')).default;
 
-                        const baseName = type === 'dtw' ? 'dtw_raw'
-                            : type === 'gw' ? 'gw_raw'
-                                : type === 'hillshade' ? 'hillshade_raw'
-                                    : 'elevation_raw';
+                        const baseNameCandidates = type === 'dtw'
+                            ? ['dtw_raw']
+                            : type === 'gw'
+                                ? ['gw_raw']
+                                : type === 'hillshade'
+                                    ? ['hillshade_raw']
+                                    : ['elevation_10m_raw', 'elevation_hr_raw', 'elevation_raw'];
+
+                        const resolveBaseName = async () => {
+                            for (const candidate of baseNameCandidates) {
+                                try {
+                                    const probe = await fetch(`maps/${candidate}_1.tif`, { method: 'HEAD' });
+                                    if (probe.ok) return candidate;
+                                } catch (e) {
+                                    // Continue to next candidate
+                                }
+                            }
+                            return baseNameCandidates[baseNameCandidates.length - 1];
+                        };
+
+                        const selectedBaseName = await resolveBaseName();
+                        console.log(`[Raster] ${name} using base source: ${selectedBaseName}`);
+
+                        const renderResolution = type === 'dem' ? 256 : type === 'gw' ? 128 : 96;
+                        const resampleMethod = type === 'dem' ? 'bilinear' : 'nearest';
 
                         const loadPart = async (i: number) => {
-                            const url = `maps/${baseName}_${i}.tif`;
+                            const url = `maps/${selectedBaseName}_${i}.tif`;
                             const response = await fetch(url);
                             if (!response.ok) throw new Error(`Failed to fetch ${url}`);
                             const arrayBuffer = await response.arrayBuffer();
@@ -364,7 +385,8 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                     const scale = chroma.scale(palette).domain([min, max]);
                                     return scale(v).hex();
                                 },
-                                resolution: 64,
+                                resolution: renderResolution,
+                                resampleMethod,
                                 debugLevel: 0
                             });
 
@@ -1826,6 +1848,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                             />
                             <div className="mt-1 text-[9px] text-gray-600">Use elevation to reduce pumping head and identify practical tank points.</div>
+                            <div className="text-[8px] text-gray-500">High-res DEM files are auto-used when available (`elevation_10m_raw_*`).</div>
                             <div className="mt-1 text-[9px] text-gray-600">
                                 View range: {layerRanges.dem.min.toFixed(1)} m to {layerRanges.dem.max.toFixed(1)} m
                             </div>
