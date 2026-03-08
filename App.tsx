@@ -8,7 +8,7 @@ import { Dashboard } from './components/Dashboard';
 import { SplashScreen } from './components/SplashScreen';
 import { useProjectState } from './hooks/useProjectState';
 import { AnalyticsService } from './services/analyticsService';
-import { Droplets, Map as MapIcon, ClipboardList, TrendingUp, Database, Info, Search, Layers, Settings, CheckCircle, Settings as SettingsIcon, Timer, Heart, DollarSign, Coins, Activity, Download, RotateCcw, Zap, MessageSquare, RefreshCw } from 'lucide-react';
+import { Droplets, Map as MapIcon, ClipboardList, TrendingUp, Database, Settings as SettingsIcon, Timer, Heart, DollarSign, Coins, Activity, Download, RotateCcw, Zap, MessageSquare, RefreshCw } from 'lucide-react';
 import { APP_NOTICE_EVENT, notifyApp } from './utils/notifications';
 import type { AppNotice } from './utils/notifications';
 // @ts-ignore - html2pdf types are not perfect
@@ -162,19 +162,13 @@ const App: React.FC = () => {
     const hasValidatedAndApplied = hasValidatedDesign && designApplied;
     const hasAnalyzed = hasVisitedAnalysis || simulationResult !== null;
     const workflowSteps = [
-        { label: 'Map Setup', done: hasLocatedSite, hint: 'Use Map Guided Workflow A (site + layers).' },
-        { label: 'Network Layout', done: hasDrawnNetwork, hint: 'Use Map Guided Workflow B (borehole/tank/tapstands).' },
-        { label: 'Validate & Apply', done: hasValidatedAndApplied, hint: 'Use Map Guided Workflow C and click Apply Design.' },
-        { label: 'Review Analysis', done: hasAnalyzed, hint: 'Check charts in Economic Analysis.' },
-        { label: 'Export Report', done: hasExportedReport, hint: 'Download the full PDF report.' }
-    ];
-    const mapWorkflowSteps = [
-        { label: 'A. Map Setup', done: hasLocatedSite, hint: 'Search site, load Google Buildings, and inspect GWP + Elevation.' },
-        { label: 'B. Network Layout', done: hasDrawnNetwork, hint: 'Place borehole/tank, then pipelines and strategic service points.' },
-        { label: 'C. Validate & Apply', done: hasValidatedAndApplied, hint: 'Confirm served/unserved, sync population, then Apply Design.' }
+        { label: 'Locate Site + Buildings', done: hasLocatedSite, hint: 'Search village, load Google Buildings, and wait for layer loading.', tab: 'Design Map' },
+        { label: 'Layout Network', done: hasDrawnNetwork, hint: 'Place borehole/tank, then draw pipelines and add service points.', tab: 'Design Map' },
+        { label: 'Validate + Apply', done: hasValidatedAndApplied, hint: 'Review served/unserved population and click Apply Design.', tab: 'Design Map' },
+        { label: 'Review Economics', done: hasAnalyzed, hint: 'Check lifecycle cost comparison and sensitivity analysis.', tab: 'Economic Analysis' },
+        { label: 'Export + Share', done: hasExportedReport, hint: 'Download report PDF for implementation and procurement.', tab: 'Economic Analysis' }
     ];
     const nextPendingStep = workflowSteps.find(step => !step.done);
-    const nextPendingMapStep = mapWorkflowSteps.find(step => !step.done);
 
     return (
         <div className="min-h-screen bg-gray-100 font-sans text-gray-800 relative">
@@ -194,17 +188,14 @@ const App: React.FC = () => {
                             <div className="bg-[#1CABE2] p-2 rounded-lg"><Droplets className="w-6 h-6 text-white" /></div>
                             <div><h1 className="text-xl font-bold tracking-tight">Malawi Water Supply Comparison</h1><p className="text-xs text-slate-400">Site Specific Economic Feasibility Tool</p></div>
                         </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setShowFeedback(true)} className="px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition text-slate-300 hover:bg-slate-800" title="Send Feedback">
-                                <MessageSquare className="w-4 h-4" /> Feedback
-                            </button>
+                        <div className="flex flex-wrap justify-end gap-2">
                             <button onClick={resetProject} className="px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition text-slate-300 hover:bg-slate-800" title="Start New Analysis">
                                 <RefreshCw className="w-4 h-4" /> New Analysis
                             </button>
                             <button onClick={() => setActiveTab('map')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition ${activeTab === 'map' ? 'bg-[#1CABE2] text-white' : 'text-slate-300 hover:bg-slate-800'}`}><MapIcon className="w-4 h-4" /> Design Map</button>
                             <button onClick={() => setActiveTab('schematic')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition ${activeTab === 'schematic' ? 'bg-[#1CABE2] text-white' : 'text-slate-300 hover:bg-slate-800'}`}><ClipboardList className="w-4 h-4" /> Schematic & BoQ</button>
                             <button onClick={() => setActiveTab('analysis')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition ${activeTab === 'analysis' ? 'bg-[#1CABE2] text-white' : 'text-slate-300 hover:bg-slate-800'}`}><TrendingUp className="w-4 h-4" /> Economic Analysis</button>
-                            <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition ${activeTab === 'dashboard' ? 'bg-[#1CABE2] text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Database className="w-4 h-4" /> Dashboard</button>
+                            <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition ${activeTab === 'dashboard' ? 'bg-[#1CABE2] text-white' : 'text-slate-300 hover:bg-slate-800'}`}><Database className="w-4 h-4" /> Insights & Feedback</button>
                         </div>
                     </div>
                 </div>
@@ -215,11 +206,11 @@ const App: React.FC = () => {
                     <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 mb-3">
                         <div>
                             <h3 className="font-bold text-gray-900">Guided Workflow</h3>
-                            <p className="text-sm text-gray-600">Complete steps in sequence for a strong technical and economic report.</p>
+                            <p className="text-sm text-gray-600">Use one clear flow: Design Map -> Schematic & BoQ -> Economic Analysis -> Insights & Feedback.</p>
                         </div>
                         {nextPendingStep ? (
                             <div className="text-xs bg-amber-50 border border-amber-200 text-amber-900 px-3 py-1.5 rounded-lg">
-                                Next: <strong>{nextPendingStep.label}</strong> - {nextPendingStep.hint}
+                                Next: <strong>{nextPendingStep.label}</strong> ({nextPendingStep.tab}) - {nextPendingStep.hint}
                             </div>
                         ) : (
                             <div className="text-xs bg-emerald-50 border border-emerald-200 text-emerald-900 px-3 py-1.5 rounded-lg">
@@ -232,7 +223,7 @@ const App: React.FC = () => {
                             <div key={step.label} className={`rounded-lg border px-3 py-2 ${step.done ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
                                 <div className="text-xs font-bold uppercase tracking-wide text-gray-500">Step {index + 1}</div>
                                 <div className={`font-semibold text-sm ${step.done ? 'text-emerald-800' : 'text-gray-700'}`}>{step.label}</div>
-                                <div className="text-[11px] text-gray-500 mt-1">{step.done ? 'Completed' : step.hint}</div>
+                                <div className="text-[11px] text-gray-500 mt-1">{step.done ? 'Completed' : `${step.hint} (${step.tab})`}</div>
                             </div>
                         ))}
                     </div>
@@ -240,56 +231,8 @@ const App: React.FC = () => {
 
                 {/* MAP TAB */}
                 <div className={activeTab === 'map' ? 'block' : 'hidden'}>
-                    <div className="mb-6 bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
-                            <div className="flex items-center gap-2">
-                                <Info className="w-5 h-5 text-[#1CABE2]" />
-                                <h3 className="font-bold text-gray-800 text-lg">Map Guided Workflow</h3>
-                            </div>
-                            {nextPendingMapStep ? (
-                                <div className="text-xs bg-blue-50 border border-blue-200 text-blue-900 px-3 py-1.5 rounded-lg">
-                                    Map next: <strong>{nextPendingMapStep.label}</strong> - {nextPendingMapStep.hint}
-                                </div>
-                            ) : (
-                                <div className="text-xs bg-emerald-50 border border-emerald-200 text-emerald-900 px-3 py-1.5 rounded-lg">
-                                    Map workflow complete. Continue with Economic Analysis.
-                                </div>
-                            )}
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-                            {mapWorkflowSteps.map((step) => (
-                                <div key={step.label} className={`rounded-lg border px-3 py-2 ${step.done ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
-                                    <div className="text-xs font-bold uppercase tracking-wide text-gray-500">{step.label}</div>
-                                    <div className={`text-[11px] mt-1 ${step.done ? 'text-emerald-700' : 'text-gray-600'}`}>{step.done ? 'Completed' : step.hint}</div>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="flex items-center gap-2 mb-3">
-                            <Info className="w-5 h-5 text-[#1CABE2]" />
-                            <h3 className="font-bold text-gray-800 text-lg">Detailed Map Steps (Supports Overview Steps 1-3)</h3>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-sm text-gray-600">
-                            <div className="bg-blue-50 p-3 rounded border border-blue-100">
-                                <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><Search className="w-4 h-4" /> 1. Set Site + Buildings</div>
-                                <p className="text-xs">Search and select village (map zooms to it), load <strong>Google Buildings</strong>, then wait for loading before population estimates.</p>
-                            </div>
-                            <div className="bg-blue-50 p-3 rounded border border-blue-100">
-                                <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><Layers className="w-4 h-4" /> 2. Site Borehole + Tank</div>
-                                <p className="text-xs">Place borehole in stronger GWP zones, not too far from tank. Place tank above most households in elevation where practical.</p>
-                            </div>
-                            <div className="bg-blue-50 p-3 rounded border border-blue-100">
-                                <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><Settings className="w-4 h-4" /> 3. Route Network</div>
-                                <p className="text-xs">Draw pipelines toward downhill households and keep scheme footprint preferably within <strong>2 km</strong> of tank.</p>
-                            </div>
-                            <div className="bg-blue-50 p-3 rounded border border-blue-100">
-                                <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><MapIcon className="w-4 h-4" /> 4. Estimate Population</div>
-                                <p className="text-xs">Only after steps 1-3, served and unserved are estimated. Unserved is limited to households downhill and within <strong>1.5 km</strong> of tank.</p>
-                            </div>
-                            <div className="bg-emerald-50 p-3 rounded border border-emerald-100 ring-2 ring-emerald-500/20">
-                                <div className="flex items-center gap-2 font-bold text-emerald-800 mb-1"><CheckCircle className="w-4 h-4" /> 5. Final Step</div>
-                                <p className="text-xs font-medium">Click <strong>Apply Design</strong> to lock hydraulics and costs, then review Economic Analysis and export the report.</p>
-                            </div>
-                        </div>
+                    <div className="mb-6 bg-blue-50 border border-blue-200 text-blue-900 p-4 rounded-lg shadow-sm text-sm">
+                        Complete <strong>Guided Workflow Steps 1-3</strong> here: search village and load buildings, place borehole/tank, route pipelines/service points, then click <strong>Apply Design</strong>.
                     </div>
                     <SiteMap key={mapResetKey} population={global.population} setPopulation={(p) => setGlobal(prev => ({ ...prev, population: p }))} projectDetails={projectDetails} setProjectDetails={setProjectDetails} inputs={hydraulicInputs} setInputs={setHydraulicInputs} onUpdateCalc={handleUpdateCalc} onApplyDesign={handleApplyDesign} />
                 </div>
@@ -313,6 +256,21 @@ const App: React.FC = () => {
 
                 {/* DASHBOARD TAB */}
                 <div className={activeTab === 'dashboard' ? 'block' : 'hidden'}>
+                    <div className="mb-6 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                            <div>
+                                <h3 className="font-bold text-gray-900">Insights & Feedback</h3>
+                                <p className="text-sm text-gray-600">Review analytics and submit user feedback from one place.</p>
+                            </div>
+                            <button
+                                onClick={() => setShowFeedback(true)}
+                                className="px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition bg-slate-100 text-slate-700 hover:bg-slate-200 w-fit"
+                                title="Send Feedback"
+                            >
+                                <MessageSquare className="w-4 h-4" /> Send Feedback
+                            </button>
+                        </div>
+                    </div>
                     <Dashboard />
                 </div>
 
