@@ -206,9 +206,16 @@ const App: React.FC = () => {
             </header >
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div className="mb-4 bg-white p-3 rounded-lg border border-gray-200 text-sm text-gray-700">
-                    <strong>Workflow:</strong> Design Map -> Schematic & BoQ -> Economic Analysis -> Insights & Feedback.
-                    <div className="text-xs text-gray-600 mt-1">{nextActionText}</div>
+                <div className="mb-4 bg-white p-4 rounded-lg border border-gray-200 text-sm text-gray-700">
+                    <h3 className="font-bold text-gray-900 mb-2">Guided Workflow</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-2 text-xs">
+                        <div className="bg-gray-50 border border-gray-200 rounded p-2"><strong>1.</strong> Set site + load buildings</div>
+                        <div className="bg-gray-50 border border-gray-200 rounded p-2"><strong>2.</strong> Place borehole + tank</div>
+                        <div className="bg-gray-50 border border-gray-200 rounded p-2"><strong>3.</strong> Route network + apply design</div>
+                        <div className="bg-gray-50 border border-gray-200 rounded p-2"><strong>4.</strong> Review economic analysis</div>
+                        <div className="bg-gray-50 border border-gray-200 rounded p-2"><strong>5.</strong> Export report + share feedback</div>
+                    </div>
+                    <div className="text-xs text-gray-600 mt-2">{nextActionText}</div>
                 </div>
 
                 {/* MAP TAB */}
