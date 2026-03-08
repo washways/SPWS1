@@ -153,18 +153,27 @@ const App: React.FC = () => {
     };
 
     const hasLocatedSite = projectDetails.siteName.trim().length > 0;
-    const hasDrawnNetwork = Boolean(systemGeometry?.borehole && systemGeometry?.tank && (systemGeometry?.taps?.length || 0) > 0);
-    const hasValidatedDesign = Boolean(systemSpecs && generatedBoQ.length > 0);
+    const hasPlacedBorehole = Boolean(systemGeometry?.borehole);
+    const hasPlacedTank = Boolean(systemGeometry?.tank);
+    const hasPlacedTapstands = (systemGeometry?.taps?.length || 0) > 0;
+    const hasDrawnNetwork = hasPlacedBorehole && hasPlacedTank && hasPlacedTapstands;
+    const hasValidatedDesign = hasDrawnNetwork && Boolean(systemSpecs && generatedBoQ.length > 0);
+    const hasValidatedAndApplied = hasValidatedDesign && designApplied;
     const hasAnalyzed = hasVisitedAnalysis || simulationResult !== null;
     const workflowSteps = [
-        { label: 'Locate Site', done: hasLocatedSite, hint: 'Search and confirm village.' },
-        { label: 'Draw Network', done: hasDrawnNetwork, hint: 'Place borehole, tank and taps.' },
-        { label: 'Validate Design', done: hasValidatedDesign, hint: 'Generate hydraulic and BoQ outputs.' },
-        { label: 'Apply Design', done: designApplied, hint: 'Apply design from map panel.' },
+        { label: 'Map Setup', done: hasLocatedSite, hint: 'Use Map Guided Workflow A (site + layers).' },
+        { label: 'Network Layout', done: hasDrawnNetwork, hint: 'Use Map Guided Workflow B (borehole/tank/tapstands).' },
+        { label: 'Validate & Apply', done: hasValidatedAndApplied, hint: 'Use Map Guided Workflow C and click Apply Design.' },
         { label: 'Review Analysis', done: hasAnalyzed, hint: 'Check charts in Economic Analysis.' },
         { label: 'Export Report', done: hasExportedReport, hint: 'Download the full PDF report.' }
     ];
+    const mapWorkflowSteps = [
+        { label: 'A. Map Setup', done: hasLocatedSite, hint: 'Search site, load Google Buildings, read DTW/GWP/Elevation layers.' },
+        { label: 'B. Network Layout', done: hasDrawnNetwork, hint: 'Place borehole, tank, tapstands, and draw main pipes.' },
+        { label: 'C. Validate & Apply', done: hasValidatedAndApplied, hint: 'Tune buffer + people/building, then Apply Design.' }
+    ];
     const nextPendingStep = workflowSteps.find(step => !step.done);
+    const nextPendingMapStep = mapWorkflowSteps.find(step => !step.done);
 
     return (
         <div className="min-h-screen bg-gray-100 font-sans text-gray-800 relative">
@@ -217,7 +226,7 @@ const App: React.FC = () => {
                             </div>
                         )}
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
                         {workflowSteps.map((step, index) => (
                             <div key={step.label} className={`rounded-lg border px-3 py-2 ${step.done ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
                                 <div className="text-xs font-bold uppercase tracking-wide text-gray-500">Step {index + 1}</div>
@@ -231,9 +240,32 @@ const App: React.FC = () => {
                 {/* MAP TAB */}
                 <div className={activeTab === 'map' ? 'block' : 'hidden'}>
                     <div className="mb-6 bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
+                            <div className="flex items-center gap-2">
+                                <Info className="w-5 h-5 text-[#1CABE2]" />
+                                <h3 className="font-bold text-gray-800 text-lg">Map Guided Workflow</h3>
+                            </div>
+                            {nextPendingMapStep ? (
+                                <div className="text-xs bg-blue-50 border border-blue-200 text-blue-900 px-3 py-1.5 rounded-lg">
+                                    Map next: <strong>{nextPendingMapStep.label}</strong> - {nextPendingMapStep.hint}
+                                </div>
+                            ) : (
+                                <div className="text-xs bg-emerald-50 border border-emerald-200 text-emerald-900 px-3 py-1.5 rounded-lg">
+                                    Map workflow complete. Continue with Economic Analysis.
+                                </div>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                            {mapWorkflowSteps.map((step) => (
+                                <div key={step.label} className={`rounded-lg border px-3 py-2 ${step.done ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
+                                    <div className="text-xs font-bold uppercase tracking-wide text-gray-500">{step.label}</div>
+                                    <div className={`text-[11px] mt-1 ${step.done ? 'text-emerald-700' : 'text-gray-600'}`}>{step.done ? 'Completed' : step.hint}</div>
+                                </div>
+                            ))}
+                        </div>
                         <div className="flex items-center gap-2 mb-3">
                             <Info className="w-5 h-5 text-[#1CABE2]" />
-                            <h3 className="font-bold text-gray-800 text-lg">Map Guided Workflow</h3>
+                            <h3 className="font-bold text-gray-800 text-lg">Detailed Map Steps (Supports Overview Steps 1-3)</h3>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-sm text-gray-600">
                             <div className="bg-blue-50 p-3 rounded border border-blue-100">
