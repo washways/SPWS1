@@ -168,9 +168,9 @@ const App: React.FC = () => {
         { label: 'Export Report', done: hasExportedReport, hint: 'Download the full PDF report.' }
     ];
     const mapWorkflowSteps = [
-        { label: 'A. Map Setup', done: hasLocatedSite, hint: 'Search site, load Google Buildings, read DTW/GWP/Elevation layers.' },
-        { label: 'B. Network Layout', done: hasDrawnNetwork, hint: 'Place borehole, tank, tapstands, and draw main pipes.' },
-        { label: 'C. Validate & Apply', done: hasValidatedAndApplied, hint: 'Tune buffer + people/building, then Apply Design.' }
+        { label: 'A. Map Setup', done: hasLocatedSite, hint: 'Search site, load Google Buildings, and inspect GWP + Elevation.' },
+        { label: 'B. Network Layout', done: hasDrawnNetwork, hint: 'Place borehole/tank, then pipelines and strategic service points.' },
+        { label: 'C. Validate & Apply', done: hasValidatedAndApplied, hint: 'Confirm served/unserved, sync population, then Apply Design.' }
     ];
     const nextPendingStep = workflowSteps.find(step => !step.done);
     const nextPendingMapStep = mapWorkflowSteps.find(step => !step.done);
@@ -270,19 +270,19 @@ const App: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-sm text-gray-600">
                             <div className="bg-blue-50 p-3 rounded border border-blue-100">
                                 <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><Search className="w-4 h-4" /> 1. Set Site + Buildings</div>
-                                <p className="text-xs">Search and zoom to site, turn on <strong>Google Buildings</strong>, then wait for the loading spinner to finish before reading served/unserved totals.</p>
+                                <p className="text-xs">Search site, load <strong>Google Buildings</strong>, and wait for loading to complete before doing any population estimate.</p>
                             </div>
                             <div className="bg-blue-50 p-3 rounded border border-blue-100">
-                                <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><Layers className="w-4 h-4" /> 2. Read DTW + GWP</div>
-                                <p className="text-xs"><strong>DTW:</strong> lower depth areas are easier drilling targets. <strong>GWP:</strong> higher potential areas are stronger candidate zones. Use both together.</p>
+                                <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><Layers className="w-4 h-4" /> 2. Site Borehole + Tank</div>
+                                <p className="text-xs">Place borehole in stronger GWP zones, not too far from tank. Place tank above most households in elevation where practical.</p>
                             </div>
                             <div className="bg-blue-50 p-3 rounded border border-blue-100">
-                                <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><Settings className="w-4 h-4" /> 3. Check Elevation</div>
-                                <p className="text-xs">Use <strong>Elevation</strong> and <strong>Hillshade</strong> to place tanks on practical high points and to avoid steep pipe runs.</p>
+                                <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><Settings className="w-4 h-4" /> 3. Route Network</div>
+                                <p className="text-xs">Draw main pipelines toward households downhill from tank. Add tapstands/institutions strategically near main pipelines.</p>
                             </div>
                             <div className="bg-blue-50 p-3 rounded border border-blue-100">
                                 <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><MapIcon className="w-4 h-4" /> 4. Estimate Population</div>
-                                <p className="text-xs">Place borehole, tank, and <strong>tapstands</strong>. Tune <strong>Service Buffer</strong> + <strong>People per Building</strong>, then click <strong>Use Served</strong> to update target population.</p>
+                                <p className="text-xs">Only after steps 1-3, served and unserved are estimated. Unserved is limited to households downhill and within <strong>1.5 km</strong> of tank.</p>
                             </div>
                             <div className="bg-emerald-50 p-3 rounded border border-emerald-100 ring-2 ring-emerald-500/20">
                                 <div className="flex items-center gap-2 font-bold text-emerald-800 mb-1"><CheckCircle className="w-4 h-4" /> 5. Final Step</div>

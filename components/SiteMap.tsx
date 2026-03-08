@@ -105,9 +105,12 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
 
     // Default to street view
     const [mapStyle, setMapStyle] = useState<MapStyle>('street');
+    const [showLayerPanel, setShowLayerPanel] = useState(false);
+    const [showToolPanel, setShowToolPanel] = useState(false);
     const [isDrawing, setIsDrawing] = useState(false);
     const [currentSegment, setCurrentSegment] = useState<L.LatLng[]>([]);
     const currentSegmentRef = useRef<L.LatLng[]>([]); // Ref for event listeners
+    const downhillFilterWarnedRef = useRef(false);
 
     // GEE Layers State
     const [showDTW, setShowDTW] = useState(false);
@@ -183,6 +186,53 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             return L.CRS.EPSG3857.unproject(L.point(x, y));
         }
         return L.latLng(y, x);
+    };
+
+    const fromLatLng = (ll: L.LatLng, projection: unknown) => {
+        const projectionCode = getProjectionCode(projection);
+        if (projectionCode === 3857 || projectionCode === 900913 || projectionCode === 102100 || projectionCode === 3785) {
+            const projected = L.CRS.EPSG3857.project(ll);
+            return { x: projected.x, y: projected.y };
+        }
+        return { x: ll.lng, y: ll.lat };
+    };
+
+    const sampleDemElevationAt = (ll: L.LatLng): number | null => {
+        const demGroup = geeLayersRef.current.dem;
+        if (!demGroup) return null;
+
+        let sampled: number | null = null;
+        demGroup.eachLayer((layer: any) => {
+            if (sampled !== null) return;
+            const georaster = layer?.georaster;
+            if (!georaster || !georaster.values) return;
+
+            const width = georaster.width || 0;
+            const height = georaster.height || 0;
+            if (!width || !height) return;
+
+            const { x, y } = fromLatLng(ll, georaster.projection);
+            if (x < georaster.xmin || x > georaster.xmax || y < georaster.ymin || y > georaster.ymax) return;
+
+            const pixelWidth = georaster.pixelWidth || ((georaster.xmax - georaster.xmin) / width);
+            const pixelHeight = Math.abs(georaster.pixelHeight || ((georaster.ymax - georaster.ymin) / height));
+            if (!pixelWidth || !pixelHeight) return;
+
+            const col = Math.max(0, Math.min(width - 1, Math.floor((x - georaster.xmin) / pixelWidth)));
+            const row = Math.max(0, Math.min(height - 1, Math.floor((georaster.ymax - y) / pixelHeight)));
+
+            let band0 = georaster.values[0];
+            if (!Array.isArray(band0)) band0 = georaster.values;
+            if (!Array.isArray(band0)) return;
+
+            const rowData = band0[row];
+            if (!rowData) return;
+            const value = rowData[col];
+            if (value === -9999 || value === null || value === undefined || Number.isNaN(value)) return;
+            sampled = value;
+        });
+
+        return sampled;
     };
 
     // Auto-Contrast Handler: can run globally or only on the current viewport.
@@ -1466,23 +1516,59 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             ];
         };
 
-        if (pipes.length === 0 && pointFeatures.length === 0) {
-            // No pipes or points, all unserved
-            const activeBuildingLayer = showGoogleBuildings && googleBuildingLayerRef.current ? googleBuildingLayerRef.current : osmBuildingLayerRef.current;
+        const activeBuildingLayer = showGoogleBuildings && googleBuildingLayerRef.current ? googleBuildingLayerRef.current : osmBuildingLayerRef.current;
+        const tankLL = features.current.tank?.marker.getLatLng() || null;
+        const tankElevation = features.current.tank?.elev ?? null;
+        const catchmentRadiusM = 1500;
 
-            if (activeBuildingLayer) {
-                console.log('No infrastructure - marking all buildings as unserved');
-                activeBuildingLayer.eachLayer((layer: any) => {
-                    if (layer.setStyle) layer.setStyle({ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.3, weight: 1 });
-                    unservedCount++;
-                });
-            } else {
-                console.log('No building layer available for unserved analysis');
+        // Keep only service points that are near the drawn distribution network.
+        const connectionTolerance = Math.max(35, Math.min(120, bufferDistance));
+        const connectedServicePoints = pointFeatures.filter((pt) => {
+            if (tankLL && pt.distanceTo(tankLL) <= connectionTolerance) return true;
+
+            for (const pipe of pipes) {
+                const pts = pipe.getLatLngs() as L.LatLng[] | L.LatLng[][];
+                const flatPts: L.LatLng[] = (Array.isArray(pts[0]) && !('lat' in (pts[0] as any))) ? (pts as any).flat() : (pts as L.LatLng[]);
+                for (let i = 0; i < flatPts.length - 1; i++) {
+                    if (getDistToSegmentMeters(pt, flatPts[i], flatPts[i + 1]) <= connectionTolerance) {
+                        return true;
+                    }
+                }
             }
+            return false;
+        });
+
+        const canEstimatePopulation = Boolean(
+            showGoogleBuildings &&
+            features.current.borehole &&
+            features.current.tank &&
+            features.current.mainLines.length > 0 &&
+            connectedServicePoints.length > 0
+        );
+
+        if (!activeBuildingLayer) {
+            console.log('No building layer available for service analysis');
+        } else if (!canEstimatePopulation) {
+            // Workflow not complete yet: keep buildings neutral and do not estimate population.
+            activeBuildingLayer.eachLayer((layer: any) => {
+                if (layer.setStyle) {
+                    layer.setStyle({ color: '#64748b', fillColor: '#94a3b8', fillOpacity: 0.2, weight: 1 });
+                }
+            });
+            servedCount = 0;
+            unservedCount = 0;
         } else {
-            // Draw Visual Buffers for Point Features
+            if (!geeLayersRef.current.dem && !downhillFilterWarnedRef.current) {
+                downhillFilterWarnedRef.current = true;
+                notifyApp({
+                    type: "warning",
+                    message: "Turn on Elevation layer for more accurate downhill filtering from tank."
+                });
+            }
+
+            // Draw visual buffers around connected service points only.
             if (visualBufferLayerRef.current) {
-                pointFeatures.forEach(pt => {
+                connectedServicePoints.forEach(pt => {
                     L.circle(pt, {
                         radius: bufferDistance,
                         color: '#22c55e',
@@ -1494,40 +1580,42 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                 });
             }
 
-            // Determine which building layer to use
-            const activeBuildingLayer = showGoogleBuildings && googleBuildingLayerRef.current ? googleBuildingLayerRef.current : osmBuildingLayerRef.current;
+            console.log("Running service analysis on layer:", showGoogleBuildings ? "Google" : "OSM");
+            activeBuildingLayer.eachLayer((layer: any) => {
+                if (!(layer.feature && (layer.feature.geometry.type === 'Polygon' || layer.feature.geometry.type === 'MultiPolygon'))) return;
 
-            if (activeBuildingLayer) {
-                console.log("Running service analysis on layer:", showGoogleBuildings ? "Google" : "OSM");
-                activeBuildingLayer.eachLayer((layer: any) => {
-                    // Google Buildings (FGB) features might be different structure than OSM
-                    // OSM: layer.feature.geometry.type === 'Polygon'
-                    // FGB: layer.feature.geometry.type === 'Polygon' (usually)
+                const center = layer.getBounds().getCenter();
 
-                    if (layer.feature && (layer.feature.geometry.type === 'Polygon' || layer.feature.geometry.type === 'MultiPolygon')) {
-                        const bounds = layer.getBounds();
-                        const center = bounds.getCenter();
+                // Eligibility for both served/unserved counts:
+                // downhill from tank (when elevations available) and within 1.5km of tank.
+                const withinRadius = tankLL ? center.distanceTo(tankLL) <= catchmentRadiusM : false;
+                const buildingElevation = sampleDemElevationAt(center);
+                const isDownhill = (tankElevation === null || buildingElevation === null) ? true : buildingElevation <= tankElevation + 1;
+                const eligible = withinRadius && isDownhill;
 
-                        let isServed = false;
-
-                        // Check distance to point features ONLY (pipes convey water but don't distribute it)
-                        for (const pt of pointFeatures) {
-                            if (center.distanceTo(pt) <= bufferDistance) {
-                                isServed = true;
-                                break;
-                            }
-                        }
-
-                        if (isServed) {
-                            layer.setStyle({ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.5, weight: 2 }); // Green, thicker
-                            servedCount++;
-                        } else {
-                            layer.setStyle({ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.3, weight: 1 }); // Red
-                            unservedCount++;
-                        }
+                if (!eligible) {
+                    if (layer.setStyle) {
+                        layer.setStyle({ color: '#94a3b8', fillColor: '#cbd5e1', fillOpacity: 0.12, weight: 1 });
                     }
-                });
-            }
+                    return;
+                }
+
+                let isServed = false;
+                for (const pt of connectedServicePoints) {
+                    if (center.distanceTo(pt) <= bufferDistance) {
+                        isServed = true;
+                        break;
+                    }
+                }
+
+                if (isServed) {
+                    layer.setStyle({ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.5, weight: 2 });
+                    servedCount++;
+                } else {
+                    layer.setStyle({ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.3, weight: 1 });
+                    unservedCount++;
+                }
+            });
         }
 
         console.log(`Analysis complete: ${servedCount} served buildings, ${unservedCount} unserved buildings`);
@@ -1535,7 +1623,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         setServedPop(servedCount * peoplePerBuilding);
         setUnservedPop(unservedCount * peoplePerBuilding);
 
-    }, [bufferDistance, peoplePerBuilding, showOSMBuildings, showGoogleBuildings, buildingsLoading, analysisUpdateTrigger]); // Removed counts to prevent loop
+    }, [bufferDistance, peoplePerBuilding, showOSMBuildings, showGoogleBuildings, showFABDEM, buildingsLoading, layerLoading.dem, analysisUpdateTrigger]);
 
     // Recalc when pipes change
     const activeRasterLoads = [
@@ -1549,12 +1637,13 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         ...activeRasterLoads
     ].filter(Boolean).join(', ');
     const buildingSourceLabel = showGoogleBuildings ? 'Google Buildings' : showOSMBuildings ? 'OSM Buildings' : 'No Building Layer';
+    const canEstimatePopulationNow = showGoogleBuildings && counts.hasBh && counts.hasTank && counts.mainLen > 0 && (counts.taps + counts.schools + counts.clinics + counts.gardens) > 0;
 
     return (
-        <div className="flex flex-col md:flex-row gap-4 h-[calc(100vh-140px)] relative">
+        <div className="flex flex-col gap-4 h-[calc(100vh-140px)] relative">
 
             {/* 1. ENGINEERING PANEL */}
-            <div className="order-2 md:order-1 w-full md:w-80 flex flex-col gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-y-auto max-h-[40%] md:max-h-full">
+            <div className="order-2 w-full flex flex-col gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-y-auto max-h-[48vh]">
                 <div className="mb-2">
                     <form onSubmit={handleSearch} className="relative mb-2">
                         <input
@@ -1591,10 +1680,11 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                     <div className="p-2.5 bg-slate-50 rounded border border-slate-200">
                         <h4 className="font-bold text-slate-800 text-xs mb-2">Population Estimation Workflow</h4>
                         <div className="text-[10px] text-slate-700 space-y-1">
-                            <p><strong>1)</strong> Turn on <strong>Google Buildings</strong> and wait for loading to finish.</p>
-                            <p><strong>2)</strong> Place tapstands where water will actually be accessed.</p>
-                            <p><strong>3)</strong> Adjust <strong>Service Buffer</strong> and <strong>People per Building</strong>.</p>
-                            <p><strong>4)</strong> Click <strong>Use Served</strong> to update Target Population.</p>
+                            <p><strong>1)</strong> Load <strong>Google Buildings</strong>, then site the <strong>borehole</strong> in higher GWP areas and not too far from tank.</p>
+                            <p><strong>2)</strong> Place the <strong>tank</strong> above most households in elevation where practical.</p>
+                            <p><strong>3)</strong> Draw pipelines toward households downhill from tank, then add tapstands and institutions near main pipelines.</p>
+                            <p><strong>4)</strong> Served/unserved only estimates after this workflow is complete.</p>
+                            <p><strong>Rule:</strong> Unserved = downhill population within <strong>1.5 km</strong> of tank and outside service buffers.</p>
                         </div>
                         <div className="mt-2 text-[10px] text-slate-600">
                             Current building source: <strong>{buildingSourceLabel}</strong>
@@ -1612,7 +1702,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                     onChange={e => setBufferDistance(Math.max(0, parseFloat(e.target.value) || 0))}
                                     className="w-full p-1.5 border rounded text-xs"
                                 />
-                                <p className="text-[10px] text-gray-500 mt-1">Typical planning range: 100-300m depending on terrain and settlement density.</p>
+                                <p className="text-[10px] text-gray-500 mt-1">Buildings within this distance of connected taps/institutions are served. Catchment is additionally limited to 1.5 km from tank.</p>
                             </div>
                             <div>
                                 <label className="block text-gray-600 text-xs font-bold mb-1" title="Average people per household/building">People per Building</label>
@@ -1628,6 +1718,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 <span className="text-green-700 font-bold">Served: {servedPop.toLocaleString()}</span>
                                 <span className="text-red-700 font-bold">Unserved: {unservedPop.toLocaleString()}</span>
                             </div>
+                            {!canEstimatePopulationNow && (
+                                <p className="text-[10px] text-amber-700 mt-1">Complete borehole, tank, main pipeline, and service points to activate population estimates.</p>
+                            )}
                         </div>
                     </div>
                     <div>
@@ -1673,8 +1766,8 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             </div>
 
             {/* 2. MAP AREA */}
-            <div className="order-1 md:order-2 flex-1 relative min-h-[400px] md:h-full bg-gray-100 rounded-xl overflow-hidden shadow-inner border border-gray-300">
-                <div ref={mapContainerRef} className="w-full h-full z-0 min-h-[400px]" style={{ minHeight: '400px' }} />
+            <div className="order-1 w-full relative h-[70vh] min-h-[520px] bg-gray-100 rounded-xl overflow-hidden shadow-inner border border-gray-300">
+                <div ref={mapContainerRef} className="w-full h-full z-0" />
                 {(loadingElevation || buildingsLoading || activeRasterLoads.length > 0) && (
                     <div className="absolute top-4 left-4 flex flex-col gap-2 z-[400]">
                         {loadingElevation && (
@@ -1689,7 +1782,23 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                         )}
                     </div>
                 )}
-                <div className="absolute top-4 right-4 bg-white rounded-lg shadow-md border border-gray-200 p-2 flex flex-col gap-2 z-[400]">
+                <div className="absolute top-4 right-4 z-[450] flex gap-2">
+                    <button
+                        onClick={() => setShowLayerPanel(prev => !prev)}
+                        className="bg-white/95 border border-gray-200 rounded-lg shadow px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                    >
+                        {showLayerPanel ? 'Hide Layers' : 'Show Layers'}
+                    </button>
+                    <button
+                        onClick={() => setShowToolPanel(prev => !prev)}
+                        className="bg-white/95 border border-gray-200 rounded-lg shadow px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                    >
+                        {showToolPanel ? 'Hide Tools' : 'Show Tools'}
+                    </button>
+                </div>
+
+                {showLayerPanel && (
+                <div className="absolute top-16 right-4 bg-white rounded-lg shadow-md border border-gray-200 p-2 flex flex-col gap-2 z-[400] max-h-[72vh] overflow-y-auto w-[250px]">
                     {/* Google Buildings Toggle */}
                     <button
                         onClick={() => {
@@ -1923,10 +2032,12 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                         </button>
                     </div>
                 </div>
+                )}
 
                 {/* Map Controls */}
-                <div className="absolute top-4 left-4 z-[500] flex flex-col gap-2">
-                    <div className="bg-white p-2 rounded-lg shadow-md flex flex-col gap-2">
+                {showToolPanel && (
+                <div className="absolute top-16 left-4 z-[500] flex flex-col gap-2 max-h-[72vh] overflow-y-auto">
+                    <div className="bg-white p-2 rounded-lg shadow-md border border-gray-200 flex flex-col gap-2">
                         <div className="grid grid-cols-2 gap-2">
                             <ToolButton tool="select" icon={MousePointer2} label="Select" />
                             <ToolButton tool="delete" icon={Trash2} label="Delete" />
@@ -1961,6 +2072,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                         </div>
                     </div>
                 </div>
+                )}
             </div>
         </div>
     );
