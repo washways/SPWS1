@@ -50,6 +50,8 @@ const App: React.FC = () => {
         resetProject
     } = useProjectState();
     const [notices, setNotices] = useState<AppNotice[]>([]);
+    const [hasVisitedAnalysis, setHasVisitedAnalysis] = useState(false);
+    const [hasExportedReport, setHasExportedReport] = useState(false);
 
     useEffect(() => {
         const onNotice = (event: Event) => {
@@ -66,6 +68,12 @@ const App: React.FC = () => {
         window.addEventListener(APP_NOTICE_EVENT, onNotice);
         return () => window.removeEventListener(APP_NOTICE_EVENT, onNotice);
     }, []);
+
+    useEffect(() => {
+        if (activeTab === 'analysis') {
+            setHasVisitedAnalysis(true);
+        }
+    }, [activeTab]);
 
     const waitForReportReady = async (element: HTMLElement) => {
         await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
@@ -131,6 +139,7 @@ const App: React.FC = () => {
             await waitForReportReady(element);
             if (html2pdf) {
                 await html2pdf().set(opt).from(element).save();
+                setHasExportedReport(true);
                 notifyApp({ type: "success", message: "Report downloaded successfully." });
             } else {
                 notifyApp({ type: "error", message: "PDF generator library was not loaded." });
@@ -143,18 +152,27 @@ const App: React.FC = () => {
         }
     };
 
+    const hasLocatedSite = projectDetails.siteName.trim().length > 0;
+    const hasDrawnNetwork = Boolean(systemGeometry?.borehole && systemGeometry?.tank && (systemGeometry?.taps?.length || 0) > 0);
+    const hasValidatedDesign = Boolean(systemSpecs && generatedBoQ.length > 0);
+    const hasAnalyzed = hasVisitedAnalysis || simulationResult !== null;
+    const workflowSteps = [
+        { label: 'Locate Site', done: hasLocatedSite, hint: 'Search and confirm village.' },
+        { label: 'Draw Network', done: hasDrawnNetwork, hint: 'Place borehole, tank and taps.' },
+        { label: 'Validate Design', done: hasValidatedDesign, hint: 'Generate hydraulic and BoQ outputs.' },
+        { label: 'Apply Design', done: designApplied, hint: 'Apply design from map panel.' },
+        { label: 'Review Analysis', done: hasAnalyzed, hint: 'Check charts in Economic Analysis.' },
+        { label: 'Export Report', done: hasExportedReport, hint: 'Download the full PDF report.' }
+    ];
+    const nextPendingStep = workflowSteps.find(step => !step.done);
+
     return (
         <div className="min-h-screen bg-gray-100 font-sans text-gray-800 relative">
 
             <SplashScreen
                 showSplash={showSplash}
                 setShowSplash={setShowSplash}
-                showFeedback={showFeedback}
                 setShowFeedback={setShowFeedback}
-                feedbackText={feedbackText}
-                setFeedbackText={setFeedbackText}
-                handleFeedbackSubmit={handleFeedbackSubmit}
-                isSubmittingFeedback={isSubmittingFeedback}
                 zIndex={2000}
             />
 
@@ -183,6 +201,32 @@ const App: React.FC = () => {
             </header >
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div className="mb-6 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 mb-3">
+                        <div>
+                            <h3 className="font-bold text-gray-900">Guided Workflow</h3>
+                            <p className="text-sm text-gray-600">Complete steps in sequence for a strong technical and economic report.</p>
+                        </div>
+                        {nextPendingStep ? (
+                            <div className="text-xs bg-amber-50 border border-amber-200 text-amber-900 px-3 py-1.5 rounded-lg">
+                                Next: <strong>{nextPendingStep.label}</strong> - {nextPendingStep.hint}
+                            </div>
+                        ) : (
+                            <div className="text-xs bg-emerald-50 border border-emerald-200 text-emerald-900 px-3 py-1.5 rounded-lg">
+                                All workflow steps complete.
+                            </div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+                        {workflowSteps.map((step, index) => (
+                            <div key={step.label} className={`rounded-lg border px-3 py-2 ${step.done ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
+                                <div className="text-xs font-bold uppercase tracking-wide text-gray-500">Step {index + 1}</div>
+                                <div className={`font-semibold text-sm ${step.done ? 'text-emerald-800' : 'text-gray-700'}`}>{step.label}</div>
+                                <div className="text-[11px] text-gray-500 mt-1">{step.done ? 'Completed' : step.hint}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
 
                 {/* MAP TAB */}
                 <div className={activeTab === 'map' ? 'block' : 'hidden'}>
@@ -386,7 +430,7 @@ const App: React.FC = () => {
                                                 <button onClick={() => setSimMetric('financial')} className={`px-3 py-1 rounded ${simMetric === 'financial' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>Financial</button>
                                             </div>
                                         </div>
-                                        <p className="text-sm text-gray-600 mb-4">Running 10,000 scenarios varying costs and benefits by ±20%. This simulates real-world uncertainty to determine the probability of the Solar System providing better value.</p>
+                                        <p className="text-sm text-gray-600 mb-4">Running 10,000 scenarios varying costs and benefits by +/-20%. This simulates real-world uncertainty to determine the probability of the Solar System providing better value.</p>
                                         <button onClick={runSimulation} disabled={isSimulating} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow transition flex justify-center items-center gap-2" data-html2canvas-ignore="true">{isSimulating ? <RotateCcw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}{isSimulating ? 'Simulating...' : 'Run Simulation'}</button>
                                     </div>
                                 </div>

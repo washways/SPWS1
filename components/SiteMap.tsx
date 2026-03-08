@@ -20,6 +20,11 @@ interface SiteMapProps {
 
 type ToolType = 'select' | 'borehole' | 'tank' | 'tap' | 'pipeMain' | 'delete' | 'school' | 'clinic' | 'garden' | 'grid';
 type MapStyle = 'street' | 'satellite' | 'topo' | 'hybrid';
+type SearchResult = {
+    lat: string;
+    lon: string;
+    display_name: string;
+};
 
 // --- Helper: Country from Bounds ---
 function getCountryFromBounds(lat: number, lng: number): string {
@@ -121,6 +126,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     // Search State
     const [searchQuery, setSearchQuery] = useState("");
     const [searching, setSearching] = useState(false);
+    const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 
     // Building Footprints State
     const [showOSMBuildings, setShowOSMBuildings] = useState(false);
@@ -423,6 +429,15 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     };
 
     // Search Handler
+    const selectSearchResult = (result: SearchResult) => {
+        if (!mapInstanceRef.current) return;
+        mapInstanceRef.current.flyTo([parseFloat(result.lat), parseFloat(result.lon)], 15, { duration: 1.5 });
+        const shortName = result.display_name.split(',')[0];
+        setProjectDetails(prev => ({ ...prev, siteName: shortName }));
+        setSearchQuery(shortName);
+        setSearchResults([]);
+    };
+
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!searchQuery.trim() || !mapInstanceRef.current) return;
@@ -435,13 +450,9 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=${countryCode}&q=${encodeURIComponent(searchQuery)}`);
             const data = await res.json();
             if (data && data.length > 0) {
-                const { lat, lon, display_name } = data[0];
-                mapInstanceRef.current.flyTo([parseFloat(lat), parseFloat(lon)], 15, { duration: 1.5 });
-
-                // Update Project Name from Search
-                const shortName = display_name.split(',')[0];
-                setProjectDetails(prev => ({ ...prev, siteName: shortName }));
+                setSearchResults(data as SearchResult[]);
             } else {
+                setSearchResults([]);
                 notifyApp({ type: "warning", message: "Location not found in the selected country. Try a nearby name." });
             }
         } catch (err) {
@@ -1426,9 +1437,34 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             <div className="order-2 md:order-1 w-full md:w-80 flex flex-col gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-y-auto max-h-[40%] md:max-h-full">
                 <div className="mb-2">
                     <form onSubmit={handleSearch} className="relative mb-2">
-                        <input type="text" placeholder="Search Location..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1CABE2] outline-none shadow-sm" />
+                        <input
+                            type="text"
+                            placeholder="Search village, town or place..."
+                            value={searchQuery}
+                            onChange={(e) => {
+                                setSearchQuery(e.target.value);
+                                if (!e.target.value.trim()) setSearchResults([]);
+                            }}
+                            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#1CABE2] outline-none shadow-sm"
+                        />
                         <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
                     </form>
+                    <p className="text-[10px] text-gray-500 mb-2">Press Enter to search, then pick the correct result from the list.</p>
+                    {searching && <div className="text-xs text-blue-600 mb-2">Searching...</div>}
+                    {searchResults.length > 0 && (
+                        <div className="mb-2 border border-gray-200 rounded-lg bg-white max-h-40 overflow-y-auto">
+                            {searchResults.map((result) => (
+                                <button
+                                    key={`${result.lat}-${result.lon}-${result.display_name}`}
+                                    type="button"
+                                    onClick={() => selectSearchResult(result)}
+                                    className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                                >
+                                    {result.display_name}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     <h3 className="font-bold text-[#003E5E] flex items-center gap-2 border-b border-gray-200 pb-2"><Settings className="w-4 h-4" /> Design Parameters</h3>
                 </div>
                 <div className="space-y-4 text-sm">
@@ -1444,6 +1480,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                     onChange={e => setBufferDistance(Math.max(0, parseFloat(e.target.value) || 0))}
                                     className="w-full p-1.5 border rounded text-xs"
                                 />
+                                <p className="text-[10px] text-gray-500 mt-1">Typical planning range: 100-300m depending on terrain and settlement density.</p>
                             </div>
                             <div>
                                 <label className="block text-gray-600 text-xs font-bold mb-1" title="Average people per household/building">People per Building</label>
@@ -1453,6 +1490,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                     onChange={e => setPeoplePerBuilding(Math.max(1, parseFloat(e.target.value) || 1))}
                                     className="w-full p-1.5 border rounded text-xs"
                                 />
+                                <p className="text-[10px] text-gray-500 mt-1">Default 5 works for many rural contexts; adjust to your local census norm.</p>
                             </div>
                             <div className="flex justify-between text-xs pt-1 border-t border-blue-200 mt-1">
                                 <span className="text-green-700 font-bold">Served: {servedPop.toLocaleString()}</span>
@@ -1475,11 +1513,21 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                         <div className="text-[10px] text-gray-500 mt-1 text-right">
                             Spatial Estimate: <strong>{servedPop.toLocaleString()}</strong>
                         </div>
+                        <p className="text-[10px] text-gray-500 mt-1">Use "Sync" to copy the served-pop estimate into model population.</p>
                     </div>
-                    <div><label className="block text-gray-600 text-xs font-bold mb-1">Borehole Depth (m)</label><input type="number" value={inputs.boreholeDepth} onChange={e => setInputs({ ...inputs, boreholeDepth: parseFloat(e.target.value) || 0 })} className="w-full p-2 border rounded" /></div>
-                    <div><label className="block text-gray-600 text-xs font-bold mb-1">Static Water Level (m)</label><input type="number" value={inputs.staticWaterLevel} onChange={e => setInputs({ ...inputs, staticWaterLevel: parseFloat(e.target.value) || 0 })} className="w-full p-2 border rounded" /></div>
+                    <div>
+                        <label className="block text-gray-600 text-xs font-bold mb-1">Borehole Depth (m)</label>
+                        <input type="number" value={inputs.boreholeDepth} onChange={e => setInputs({ ...inputs, boreholeDepth: parseFloat(e.target.value) || 0 })} className="w-full p-2 border rounded" />
+                        <p className="text-[10px] text-gray-500 mt-1">Total drilled depth. Example: 40-90m in many Malawi settings.</p>
+                    </div>
+                    <div>
+                        <label className="block text-gray-600 text-xs font-bold mb-1">Static Water Level (m)</label>
+                        <input type="number" value={inputs.staticWaterLevel} onChange={e => setInputs({ ...inputs, staticWaterLevel: parseFloat(e.target.value) || 0 })} className="w-full p-2 border rounded" />
+                        <p className="text-[10px] text-gray-500 mt-1">Depth from ground to water table at rest (must be less than borehole depth).</p>
+                    </div>
                     <div><label className="block text-gray-600 text-xs font-bold mb-1">Tank Stand Height (m)</label>
                         <select value={inputs.tankHeight} onChange={e => setInputs({ ...inputs, tankHeight: parseFloat(e.target.value) })} className="w-full p-2 border rounded"><option value={3}>3m</option><option value={6}>6m</option><option value={9}>9m</option></select>
+                        <p className="text-[10px] text-gray-500 mt-1">Higher stands improve pressure but increase cost and structural demand.</p>
                     </div>
                 </div>
                 <div className="mt-auto bg-slate-800 text-white p-4 rounded-lg text-xs space-y-2">
