@@ -20,6 +20,7 @@ interface SiteMapProps {
 
 type ToolType = 'select' | 'borehole' | 'tank' | 'tap' | 'pipeMain' | 'delete' | 'school' | 'clinic' | 'garden' | 'grid';
 type MapStyle = 'street' | 'satellite' | 'topo' | 'hybrid';
+type RasterLayerType = 'dtw' | 'gw' | 'dem' | 'hillshade';
 type SearchResult = {
     lat: string;
     lon: string;
@@ -77,6 +78,7 @@ function getClosestPointOnSegment(p: L.LatLng, a: L.LatLng, b: L.LatLng) {
 export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, projectDetails, setProjectDetails, inputs, setInputs, onUpdateCalc, onApplyDesign }) => {
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const mapInstanceRef = useRef<L.Map | null>(null);
+    const [mapReady, setMapReady] = useState(false);
 
     const activeToolRef = useRef<ToolType>('select');
     const [activeTool, setActiveTool] = useState<ToolType>('select');
@@ -114,6 +116,12 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     const [showHillshade, setShowHillshade] = useState(false);
     const [layerOpacity, setLayerOpacity] = useState({ dtw: 0.7, gw: 0.7, dem: 0.7, hillshade: 0.5 });
     const [layerLoading, setLayerLoading] = useState({ dtw: false, gw: false, dem: false, hillshade: false });
+    const [layerRanges, setLayerRanges] = useState({
+        dtw: { min: 0, max: 60 },
+        gw: { min: 0, max: 0.5 },
+        dem: { min: 0, max: 3000 },
+        hillshade: { min: 0, max: 255 }
+    });
     const geeLayersRef = useRef<{ dtw: any, gw: any, dem: any, hillshade: any }>({ dtw: null, gw: null, dem: null, hillshade: null });
 
     const [loadingElevation, setLoadingElevation] = useState(false);
@@ -152,54 +160,79 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
     useEffect(() => { selectedCountryRef.current = selectedCountry; }, [selectedCountry]);
 
     // Visualization Params Ref (Dynamic Contrast) - Match GEE export palettes
-    const visParamsRef = useRef({
+    const visParamsRef = useRef<Record<RasterLayerType, { min: number, max: number, palette: string[] }>>({
         dtw: { min: 0, max: 60, palette: ['#0015ff', '#00a4ff', '#00fff0', '#00ff00', '#ccff00', '#ff8800', '#ff0000'] },
         gw: { min: 0, max: 0.5, palette: ['#ff0000', '#ff8800', '#ccff00', '#00ff00', '#00fff0', '#00a4ff', '#0015ff'] },
         dem: { min: 0, max: 3000, palette: ['#1a472a', '#2d5a3d', '#4a7c59', '#73a373', '#a8d5a8', '#d4e7d4', '#f5f5dc', '#d2b48c', '#8b7355', '#654321', '#ffffff'] },
         hillshade: { min: 0, max: 255, palette: ['#000000', '#ffffff'] }
     });
+    const viewportContrastTimeoutRef = useRef<number | null>(null);
 
-    // Auto-Contrast Handler (runs automatically on layer load)
-    const applyAutoContrast = (type: 'dtw' | 'gw' | 'dem' | 'hillshade', layerGroup: any) => {
+    const getProjectionCode = (projection: unknown): number => {
+        if (typeof projection === 'number') return projection;
+        if (typeof projection === 'string') {
+            const parsed = parseInt(projection.replace(/epsg:/i, ''), 10);
+            return Number.isFinite(parsed) ? parsed : 4326;
+        }
+        return 4326;
+    };
+
+    const toLatLng = (x: number, y: number, projection: unknown) => {
+        const projectionCode = getProjectionCode(projection);
+        if (projectionCode === 3857 || projectionCode === 900913 || projectionCode === 102100 || projectionCode === 3785) {
+            return L.CRS.EPSG3857.unproject(L.point(x, y));
+        }
+        return L.latLng(y, x);
+    };
+
+    // Auto-Contrast Handler: can run globally or only on the current viewport.
+    const applyAutoContrast = (type: RasterLayerType, layerGroup: any, visibleOnly = false) => {
         const values: number[] = [];
+        const mapBounds = visibleOnly && mapInstanceRef.current ? mapInstanceRef.current.getBounds() : null;
 
-        console.log(`[Auto-Contrast] Calculating stats for ${type}...`);
+        console.log(`[Auto-Contrast] Calculating stats for ${type} (${visibleOnly ? 'viewport' : 'full layer'})...`);
 
-        // Sample pixel values from all loaded tiles
+        // Sample pixel values from loaded raster parts.
         layerGroup.eachLayer((layer: any) => {
             if (layer.georaster && layer.georaster.values) {
                 try {
-                    console.log(`[Auto-Contrast] Georaster structure:`, {
-                        numberOfBands: layer.georaster.numberOfRasters || layer.georaster.values.length,
-                        height: layer.georaster.height,
-                        width: layer.georaster.width,
-                        valuesType: typeof layer.georaster.values,
-                        isArray: Array.isArray(layer.georaster.values)
-                    });
-
-                    // Handle different structures
                     let band0 = layer.georaster.values[0];
 
-                    // If values is not an array of arrays, it might be the data directly
                     if (!Array.isArray(band0)) {
                         band0 = layer.georaster.values;
                     }
 
                     if (!Array.isArray(band0)) {
-                        console.warn(`[Auto-Contrast] Unexpected data structure for ${type}`);
+                        console.warn(`[Auto-Contrast] Unexpected raster data structure for ${type}`);
                         return;
                     }
 
-                    // Sample every 20th pixel for performance
-                    for (let r = 0; r < layer.georaster.height; r += 20) {
+                    const width = layer.georaster.width || 0;
+                    const height = layer.georaster.height || 0;
+                    if (!width || !height) return;
+
+                    const targetSamples = visibleOnly ? 3500 : 2500;
+                    const step = Math.max(1, Math.floor(Math.sqrt((width * height) / targetSamples)));
+
+                    const pixelWidth = layer.georaster.pixelWidth || ((layer.georaster.xmax - layer.georaster.xmin) / width);
+                    const pixelHeight = Math.abs(layer.georaster.pixelHeight || ((layer.georaster.ymax - layer.georaster.ymin) / height));
+
+                    for (let r = 0; r < height; r += step) {
                         const row = band0[r];
                         if (!row) continue;
 
-                        for (let c = 0; c < layer.georaster.width; c += 20) {
+                        for (let c = 0; c < width; c += step) {
                             const v = row[c];
-                            if (v !== -9999 && v !== null && !isNaN(v) && v !== undefined && v !== 0) {
-                                values.push(v);
+                            if (v === -9999 || v === null || v === undefined || Number.isNaN(v)) continue;
+
+                            if (mapBounds) {
+                                const x = layer.georaster.xmin + ((c + 0.5) * pixelWidth);
+                                const y = layer.georaster.ymax - ((r + 0.5) * pixelHeight);
+                                const ll = toLatLng(x, y, layer.georaster.projection);
+                                if (!mapBounds.contains(ll)) continue;
                             }
+
+                            values.push(v);
                         }
                     }
                 } catch (e) {
@@ -215,21 +248,55 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             return;
         }
 
-        // Calculate 2nd and 98th percentiles for robust stretching
+        // Calculate 2nd and 98th percentiles for robust stretching.
         values.sort((a, b) => a - b);
-        const p2 = values[Math.floor(values.length * 0.02)];
-        const p98 = values[Math.floor(values.length * 0.98)];
+        const lowIndex = Math.floor((values.length - 1) * 0.02);
+        const highIndex = Math.floor((values.length - 1) * 0.98);
+        let p2 = values[lowIndex];
+        let p98 = values[highIndex];
+
+        if (p98 <= p2) {
+            const mid = p2;
+            const epsilon = Math.max(Math.abs(mid) * 0.01, 0.01);
+            p2 = mid - epsilon;
+            p98 = mid + epsilon;
+        }
 
         console.log(`[Auto-Contrast] ${type} - Min: ${p2.toFixed(2)}, Max: ${p98.toFixed(2)} (from ${values.length} samples)`);
 
-        // Update visualization parameters
+        // Update visualization parameters.
         visParamsRef.current[type].min = p2;
         visParamsRef.current[type].max = p98;
+        setLayerRanges(prev => ({
+            ...prev,
+            [type]: { min: p2, max: p98 }
+        }));
 
-        // Force layer redraw
+        // Force layer redraw.
         layerGroup.eachLayer((layer: any) => {
             if (layer.redraw) layer.redraw();
         });
+    };
+
+    const scheduleViewportContrast = () => {
+        if (viewportContrastTimeoutRef.current) {
+            window.clearTimeout(viewportContrastTimeoutRef.current);
+        }
+        viewportContrastTimeoutRef.current = window.setTimeout(() => {
+            const layerVisibility: Record<RasterLayerType, boolean> = {
+                dtw: showDTW,
+                gw: showGWPotential,
+                dem: showFABDEM,
+                hillshade: showHillshade
+            };
+
+            (Object.keys(layerVisibility) as RasterLayerType[]).forEach((type) => {
+                if (!layerVisibility[type]) return;
+                const layerGroup = geeLayersRef.current[type];
+                if (!layerGroup) return;
+                applyAutoContrast(type, layerGroup, true);
+            });
+        }, 180);
     };
 
 
@@ -268,66 +335,60 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 : type === 'hillshade' ? 'hillshade_raw'
                                     : 'elevation_raw';
 
-                        for (let i = 1; i <= 4; i++) {
+                        const loadPart = async (i: number) => {
                             const url = `maps/${baseName}_${i}.tif`;
+                            const response = await fetch(url);
+                            if (!response.ok) throw new Error(`Failed to fetch ${url}`);
+                            const arrayBuffer = await response.arrayBuffer();
+                            const georaster = await parse_georaster(arrayBuffer);
 
-                            fetch(url).then(async (response) => {
-                                if (!response.ok) throw new Error(`Failed to fetch ${url}`);
-                                const arrayBuffer = await response.arrayBuffer();
-                                const georaster = await parse_georaster(arrayBuffer);
+                            console.log(`[DEBUG] Loaded part ${i} of ${name}`);
+                            console.log('[DEBUG] Georaster Projection:', georaster.projection);
+                            console.log('[DEBUG] Image Height/Width:', georaster.height, georaster.width);
+                            console.log('[DEBUG] Bounds:', georaster.xmin, georaster.ymin, georaster.xmax, georaster.ymax);
 
-                                console.log(`[DEBUG] Loaded part ${i} of ${name}`);
-                                console.log('[DEBUG] Georaster Projection:', georaster.projection);
-                                console.log('[DEBUG] Image Height/Width:', georaster.height, georaster.width);
-                                console.log('[DEBUG] Bounds:', georaster.xmin, georaster.ymin, georaster.xmax, georaster.ymax);
+                            // Explicitly check validity or weird GEE codes.
+                            // The bounds (3 million+) confirm this is EPSG:3857 (Web Mercator), not 4326.
+                            if (!georaster.projection || georaster.projection === 32767) {
+                                georaster.projection = 3857;
+                            }
 
-                                // Test Proj4 Manually
-                                try {
-                                    const testPt = (proj4 as any)('EPSG:4326', 'EPSG:3857', [34.0, -13.0]);
-                                    console.log('[DEBUG] Manual Proj4 Test (MWI):', testPt);
-                                } catch (err) {
-                                    console.error('[DEBUG] Manual Proj4 Test FAILED:', err);
-                                }
+                            const layer = new GeoRasterLayer({
+                                georaster: georaster,
+                                opacity: layerOpacity[type],
+                                pixelValuesToColorFn: (values: any) => {
+                                    const v = values[0];
+                                    if (v === -9999 || v === null || isNaN(v)) return null;
 
-                                // Explicitly check validity or weird GEE codes
-                                // The bounds (3 million+) confirm this is EPSG:3857 (Web Mercator), not 4326
-                                if (!georaster.projection || georaster.projection === 32767) {
-                                    georaster.projection = 3857;
-                                }
+                                    const { min, max, palette } = visParamsRef.current[type];
+                                    const scale = chroma.scale(palette).domain([min, max]);
+                                    return scale(v).hex();
+                                },
+                                resolution: 64,
+                                debugLevel: 0
+                            });
 
-                                const layer = new GeoRasterLayer({
-                                    georaster: georaster,
-                                    opacity: layerOpacity[type],
-                                    pixelValuesToColorFn: (values: any) => {
-                                        const v = values[0];
-                                        if (v === -9999 || v === null || isNaN(v)) return null;
+                            layer.addTo(layerGroup);
+                        };
 
-                                        // Use dynamic parameters from visParamsRef
-                                        const { min, max, palette } = visParamsRef.current[type];
-                                        const scale = chroma.scale(palette).domain([min, max]);
-                                        return scale(v).hex();
-                                    },
-                                    resolution: 64,
-                                    debugLevel: 0
-                                });
+                        const partResults = await Promise.allSettled([1, 2, 3, 4].map(loadPart));
+                        const loadedCount = partResults.filter(r => r.status === 'fulfilled').length;
 
-                                layer.addTo(layerGroup);
-
-                                // Apply auto-contrast after all parts loaded
-                                if (i === 4) {
-                                    setTimeout(() => {
-                                        applyAutoContrast(type, layerGroup);
-                                        setLayerLoading(prev => ({ ...prev, [type]: false }));
-                                    }, 1000);
-                                }
-                            }).catch(e => console.warn(`Skipping part ${i} of ${name}:`, e));
+                        if (loadedCount === 0) {
+                            throw new Error(`No COG parts loaded for ${name}`);
                         }
+
+                        console.log(`Loaded ${loadedCount}/4 parts for ${name}`);
+                        applyAutoContrast(type, layerGroup, false);
+                        scheduleViewportContrast();
                     } catch (e) {
                         console.error(`Failed to init layer ${name}`, e);
                         if (geeLayersRef.current[type]) {
                             geeLayersRef.current[type].remove();
                             geeLayersRef.current[type] = null;
                         }
+                    } finally {
+                        setLayerLoading(prev => ({ ...prev, [type]: false }));
                     }
                 }
             } else {
@@ -344,6 +405,25 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         handleCOGLayer(showHillshade, 'hillshade', 'Hillshade');
 
     }, [showDTW, showGWPotential, showFABDEM, showHillshade]);
+
+    // Re-stretch active raster layers to the visible viewport after pan/zoom.
+    useEffect(() => {
+        if (!mapReady || !mapInstanceRef.current) return;
+
+        const map = mapInstanceRef.current;
+        const onViewportChange = () => scheduleViewportContrast();
+
+        map.on('moveend', onViewportChange);
+        map.on('zoomend', onViewportChange);
+
+        // Run once after layer toggles change.
+        scheduleViewportContrast();
+
+        return () => {
+            map.off('moveend', onViewportChange);
+            map.off('zoomend', onViewportChange);
+        };
+    }, [mapReady, showDTW, showGWPotential, showFABDEM, showHillshade]);
 
     // -- Icons --
     const icons = useRef({
@@ -483,6 +563,7 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
         });
 
         mapInstanceRef.current = map;
+        setMapReady(true);
         L.control.zoom({ position: 'topright' }).addTo(map);
         L.control.scale({ position: 'bottomleft', metric: true, imperial: false }).addTo(map);
 
@@ -634,7 +715,13 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
             }
         });
 
-        return () => { };
+        return () => {
+            setMapReady(false);
+            if (viewportContrastTimeoutRef.current) {
+                window.clearTimeout(viewportContrastTimeoutRef.current);
+                viewportContrastTimeoutRef.current = null;
+            }
+        };
     }, []);
 
     useEffect(() => {
@@ -1610,12 +1697,13 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                             <div className="mt-2 p-2 bg-white rounded border border-gray-200">
                                 <div className="text-[9px] font-semibold text-gray-700 mb-1">Depth to Water (m)</div>
                                 <div className="flex items-center gap-1">
-                                    <span className="text-[8px] text-gray-600">0</span>
+                                    <span className="text-[8px] text-gray-600">{layerRanges.dtw.min.toFixed(1)}</span>
                                     <div className="flex-1 h-3 rounded" style={{
                                         background: 'linear-gradient(to right, #0015ff, #00a4ff, #00fff0, #00ff00, #ccff00, #ff8800, #ff0000)'
                                     }}></div>
-                                    <span className="text-[8px] text-gray-600">60</span>
+                                    <span className="text-[8px] text-gray-600">{layerRanges.dtw.max.toFixed(1)}</span>
                                 </div>
+                                <div className="mt-1 text-[8px] text-gray-500">Auto-stretched to current zoomed map view.</div>
                             </div>
                         </div>
                     )}
@@ -1650,6 +1738,10 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 }}
                                 className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                             />
+                            <div className="mt-1 text-[9px] text-gray-600">
+                                View range: {layerRanges.gw.min.toFixed(3)} to {layerRanges.gw.max.toFixed(3)}
+                            </div>
+                            <div className="text-[8px] text-gray-500">Auto-stretched to current zoomed map view.</div>
                         </div>
                     )}
                     <button
@@ -1683,6 +1775,10 @@ export const SiteMap: React.FC<SiteMapProps> = ({ population, setPopulation, pro
                                 }}
                                 className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                             />
+                            <div className="mt-1 text-[9px] text-gray-600">
+                                View range: {layerRanges.dem.min.toFixed(1)} m to {layerRanges.dem.max.toFixed(1)} m
+                            </div>
+                            <div className="text-[8px] text-gray-500">Auto-stretched to current zoomed map view.</div>
                         </div>
                     )}
                     <button
