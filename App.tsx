@@ -163,16 +163,16 @@ const App: React.FC = () => {
     const hasAnalyzed = hasVisitedAnalysis || simulationResult !== null;
     const nextActionText =
         !hasLocatedSite
-            ? 'Next: Design Map -> search village and load Google Buildings.'
+            ? 'Next: Step 1 - Design Map: search village and load Google Buildings.'
             : !hasDrawnNetwork
-                ? 'Next: Design Map -> place borehole/tank, draw pipelines, and add service points.'
+                ? 'Next: Step 1 - Design Map: place borehole/tank, draw pipelines, and add service points.'
                 : !hasValidatedAndApplied
-                    ? 'Next: Design Map -> review served/unserved and click Apply Design.'
+                    ? 'Next: Step 1 - Design Map: review served/unserved and click Apply Design.'
                     : !hasAnalyzed
-                        ? 'Next: Economic Analysis -> review results and run sensitivity analysis.'
+                        ? 'Next: Step 3 - Economic Analysis: review results and run sensitivity analysis.'
                         : !hasExportedReport
-                            ? 'Next: Economic Analysis -> download the full PDF report.'
-                            : 'Workflow complete: design, analysis, and export are done.';
+                            ? 'Next: Step 3 - Economic Analysis: download the full PDF report.'
+                            : 'Workflow complete.';
 
     return (
         <div className="min-h-screen bg-gray-100 font-sans text-gray-800 relative">
@@ -208,14 +208,10 @@ const App: React.FC = () => {
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="mb-4 bg-white p-4 rounded-lg border border-gray-200 text-sm text-gray-700">
                     <h3 className="font-bold text-gray-900 mb-2">Guided Workflow</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-2 text-xs">
-                        <div className="bg-gray-50 border border-gray-200 rounded p-2"><strong>1.</strong> Set site + load buildings</div>
-                        <div className="bg-gray-50 border border-gray-200 rounded p-2"><strong>2.</strong> Place borehole + tank</div>
-                        <div className="bg-gray-50 border border-gray-200 rounded p-2"><strong>3.</strong> Route network + apply design</div>
-                        <div className="bg-gray-50 border border-gray-200 rounded p-2"><strong>4.</strong> Review economic analysis</div>
-                        <div className="bg-gray-50 border border-gray-200 rounded p-2"><strong>5.</strong> Export report + share feedback</div>
-                    </div>
-                    <div className="text-xs text-gray-600 mt-2">{nextActionText}</div>
+                    <p className="text-xs text-gray-700">
+                        1) Design Map: set site, load layers, lay out network, then click Apply Design. 2) Schematic &amp; BoQ: review technical design and costs. 3) Economic Analysis: review results and export report.
+                    </p>
+                    <div className="text-xs text-gray-600 mt-1">{nextActionText}</div>
                 </div>
 
                 {/* MAP TAB */}
