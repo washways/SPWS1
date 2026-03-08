@@ -271,7 +271,7 @@ const App: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-sm text-gray-600">
                             <div className="bg-blue-50 p-3 rounded border border-blue-100">
                                 <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><Search className="w-4 h-4" /> 1. Set Site + Buildings</div>
-                                <p className="text-xs">Search site, load <strong>Google Buildings</strong>, and wait for loading to complete before doing any population estimate.</p>
+                                <p className="text-xs">Search and select village (map zooms to it), load <strong>Google Buildings</strong>, then wait for loading before population estimates.</p>
                             </div>
                             <div className="bg-blue-50 p-3 rounded border border-blue-100">
                                 <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><Layers className="w-4 h-4" /> 2. Site Borehole + Tank</div>
@@ -279,7 +279,7 @@ const App: React.FC = () => {
                             </div>
                             <div className="bg-blue-50 p-3 rounded border border-blue-100">
                                 <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><Settings className="w-4 h-4" /> 3. Route Network</div>
-                                <p className="text-xs">Draw main pipelines toward households downhill from tank. Add tapstands/institutions strategically near main pipelines.</p>
+                                <p className="text-xs">Draw pipelines toward downhill households and keep scheme footprint preferably within <strong>2 km</strong> of tank.</p>
                             </div>
                             <div className="bg-blue-50 p-3 rounded border border-blue-100">
                                 <div className="flex items-center gap-2 font-bold text-blue-800 mb-1"><MapIcon className="w-4 h-4" /> 4. Estimate Population</div>
