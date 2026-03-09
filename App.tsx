@@ -8,7 +8,7 @@ import { Dashboard } from './components/Dashboard';
 import { SplashScreen } from './components/SplashScreen';
 import { useProjectState } from './hooks/useProjectState';
 import { AnalyticsService } from './services/analyticsService';
-import { Droplets, Map as MapIcon, ClipboardList, TrendingUp, Database, Settings as SettingsIcon, Timer, Heart, DollarSign, Coins, Activity, Download, RotateCcw, Zap, MessageSquare, RefreshCw } from 'lucide-react';
+import { Droplets, Map as MapIcon, ClipboardList, TrendingUp, Database, Settings as SettingsIcon, Timer, Heart, DollarSign, Coins, Activity, Download, RotateCcw, Zap, MessageSquare, RefreshCw, BookOpen, ExternalLink } from 'lucide-react';
 import { APP_NOTICE_EVENT, notifyApp } from './utils/notifications';
 import type { AppNotice } from './utils/notifications';
 // @ts-ignore - html2pdf types are not perfect
@@ -173,6 +173,7 @@ const App: React.FC = () => {
                         : !hasExportedReport
                             ? 'Next: Step 3 - Economic Analysis: download the full PDF report.'
                             : 'Workflow complete.';
+    const methodologyDocsUrl = 'https://github.com/washways/SPWS1#readme';
     const workflowGuide = [
         {
             step: 'Step 1',
@@ -227,7 +228,20 @@ const App: React.FC = () => {
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="mb-4 bg-white p-4 rounded-lg border border-gray-200 text-sm text-gray-700">
-                    <h3 className="font-bold text-gray-900 mb-3">Guided Workflow</h3>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                        <h3 className="font-bold text-gray-900">Guided Workflow</h3>
+                        <a
+                            href={methodologyDocsUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900 bg-blue-50 border border-blue-200 px-2.5 py-1.5 rounded w-fit"
+                            title="Open detailed methodology and documentation on GitHub"
+                        >
+                            <BookOpen className="w-3.5 h-3.5" />
+                            Methodology & Docs
+                            <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         {workflowGuide.map((item) => (
                             <div key={item.step} className={`rounded-lg border p-3 ${item.done ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
