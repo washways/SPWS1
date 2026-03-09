@@ -173,6 +173,26 @@ const App: React.FC = () => {
                         : !hasExportedReport
                             ? 'Next: Step 3 - Economic Analysis: download the full PDF report.'
                             : 'Workflow complete.';
+    const workflowGuide = [
+        {
+            step: 'Step 1',
+            title: 'Design Map',
+            detail: 'Search village, load buildings, place borehole and tank, route pipelines, add service points, then click Apply Design.',
+            done: hasValidatedAndApplied
+        },
+        {
+            step: 'Step 2',
+            title: 'Schematic & BoQ',
+            detail: 'Review technical layout, storage sizing, pipe lengths, and BoQ quantities before economic review.',
+            done: Boolean(systemSpecs && generatedBoQ.length > 0)
+        },
+        {
+            step: 'Step 3',
+            title: 'Economic Analysis',
+            detail: 'Review lifecycle comparison, run sensitivity analysis, and export the final report PDF.',
+            done: hasExportedReport
+        }
+    ];
 
     return (
         <div className="min-h-screen bg-gray-100 font-sans text-gray-800 relative">
@@ -207,11 +227,22 @@ const App: React.FC = () => {
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="mb-4 bg-white p-4 rounded-lg border border-gray-200 text-sm text-gray-700">
-                    <h3 className="font-bold text-gray-900 mb-2">Guided Workflow</h3>
-                    <p className="text-xs text-gray-700">
-                        1) Design Map: set site, load layers, lay out network, then click Apply Design. 2) Schematic &amp; BoQ: review technical design and costs. 3) Economic Analysis: review results and export report.
-                    </p>
-                    <div className="text-xs text-gray-600 mt-1">{nextActionText}</div>
+                    <h3 className="font-bold text-gray-900 mb-3">Guided Workflow</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {workflowGuide.map((item) => (
+                            <div key={item.step} className={`rounded-lg border p-3 ${item.done ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[11px] font-bold uppercase tracking-wide text-gray-500">{item.step}</span>
+                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${item.done ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                        {item.done ? 'Done' : 'Pending'}
+                                    </span>
+                                </div>
+                                <div className="font-semibold text-sm text-gray-800">{item.title}</div>
+                                <p className="text-xs text-gray-600 mt-1">{item.detail}</p>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="text-xs text-blue-800 bg-blue-50 border border-blue-200 rounded mt-3 px-3 py-2">{nextActionText}</div>
                 </div>
 
                 {/* MAP TAB */}
